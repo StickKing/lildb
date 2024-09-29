@@ -1,0 +1,10 @@
+select = ["ALL"]
+line-length = 79
+ignore = [
+]
+
+[per-file-ignores]
+"__init__.py" = ["F401"]
+
+[pep8-naming]
+ignore-names = ["k", "v", "i", "q", "fp", "x", "y", "z"]

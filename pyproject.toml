@@ -1,0 +1,9 @@
+[tool.poetry]
+name = "LiteDD"
+version = "0.0.1"
+description = ""
+authors = ["Anton Panteleev <mainsample@yandex.ru>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
