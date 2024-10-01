@@ -26,7 +26,7 @@ class DB:
         result = self.cursor.execute(stmt)
         for name in result.fetchall():
             table_names.append(name[0])
-            setattr(self, name[0].lower(), Table(self, name[0]))
+            setattr(self, name[0].lower(), Table(self, name[0], data_class_row=True))
         self.table_names = tuple(table_names)
 
     @cached_property
@@ -40,3 +40,19 @@ class DB:
     def drop_tables(self) -> None:
         """Drop all db tables."""
         pass
+
+
+if __name__ == "__main__":
+    db = DB("./local.db")
+    for i in db.folder:
+        print(i)
+
+    print()
+    # print(db.folder[1].delete())
+    print()
+
+    # db.folder.delete.filter()
+
+    for i in db.folder:
+        print(i.title)
+

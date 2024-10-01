@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 __all__ = (
     "Select",
     "Insert",
-    # "Delete",
+    "Delete",
 )
 
 
@@ -27,7 +27,7 @@ class Opertion:
 
 class Select(Opertion):
     """Component for select and filtred DB data."""
-    
+
     @cached_property
     def query(self) -> str:
         """Fetch base query."""
@@ -38,14 +38,17 @@ class Select(Opertion):
         result = None
         if size:
             result = self.table.cursor.execute(query).fetchmany(size)
-        else: 
+        else:
             result = self.table.cursor.execute(query).fetchall()
         return self.as_list_dict(result)
 
     def as_list_dict(self, items: list[tuple[Any]]) -> list[dict[str, Any]]:
         """Create dict from data."""
         return [
-            dict(zip(self.table.column_names, item))
+            self.table.row_cls(
+                table=self.table,
+                **dict(zip(self.table.column_names, item)),
+            )
             for item in items
         ]
 
@@ -101,23 +104,31 @@ class Insert(Opertion):
         self.table.db.connect.commit()
 
 
-# class Delete(Opertion):
-#     """Component for delete row from db."""
+class Delete(Opertion):
+    """Component for delete row from db."""
 
-#     def delete_filtered(self, value: dict) -> None:
-#         """Filtred delete row from table."""
-#         if not value:
-#             raise ValueError()
-#         query_and: str = " AND ".join(
-#             f"{key} = {item}"
-#             if item is not None else f"{key} is NULL"
-#             for key, item in value.items()
-#         )
-#         query = f"DELETE FROM {self.table.name} WHERE {query_and}"
-#         return self.execute
+    def query(self) -> str:
+        return f"DELETE FROM {self.table.name} WHERE id=?"
 
+    def filter(self, value: dict) -> None:
+        """Filtred delete row from table."""
+        if not value:
+            msg = "Value do not be empty."
+            raise ValueError(msg)
+        query_and: str = " AND ".join(
+            f"{key} = {item}"
+            if item is not None else f"{key} is NULL"
+            for key, item in value.items()
+        )
+        query = f"DELETE FROM {self.table.name} WHERE {query_and}"
+        self.table.cursor.execute(query)
+        self.table.db.connect.commit()
 
-#     def __call__(self, id_: int) -> Any:
-#         if not isinstance(id_, int):
-#             raise ValueError()
-#         return f"DELETE FROM {self.table.name} WHERE id={id_}"
+    def __call__(self, id_: int | Iterable[int]) -> None:
+        if not isinstance(id_, (int, Iterable)):
+            msg = "Wrong type."
+            raise TypeError(msg)
+        ids = (id_,)
+        ids = tuple((str(id_),) for id_ in ids)
+        self.table.cursor.executemany(self.query(), ids)
+        self.table.db.connect.commit()
