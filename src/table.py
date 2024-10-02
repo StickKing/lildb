@@ -9,6 +9,7 @@ from typing import Iterator
 from operations import Delete
 from operations import Insert
 from operations import Select
+from operations import Update
 from rows import RowDict
 from rows import make_row_data_cls
 
@@ -36,6 +37,7 @@ class Table:
         self.select = Select(self)
         self.insert = Insert(self)
         self.delete = Delete(self)
+        self.update = Update(self)
 
         if data_class_row:
             self.row_cls = make_row_data_cls(self)

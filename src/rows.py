@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import make_dataclass
 from typing import TYPE_CHECKING
+from typing import Any
 
 
 if TYPE_CHECKING:
@@ -30,6 +31,64 @@ class _RowOperationMixin:
             if name != "table"
         }
         self.table.delete(**column_value)
+
+    def update(self) -> None:
+        """Update this row."""
+        if isinstance(self, dict):
+            self.table.delete(**self)
+
+        if self.table.id_exist:
+            self.table.delete(id=self.id)
+            return
+        column_value = {
+            name: getattr(self, name)
+            for name in self.__slots__
+            if name != "table"
+        }
+        self.table.delete(**column_value)
+
+
+# class _RowDataClsMixin:
+
+#     __slots__ = ()
+
+#     def delete(self) -> None:
+#         """Delete this row from db."""
+#         if isinstance(self, dict):
+#             if self.table.id_exist:
+#                 self.table.delete(id=self["id"])
+#                 return
+#             self.table.delete(**self)
+
+#         if self.table.id_exist:
+#             self.table.delete(id=self.id)
+#             return
+#         column_value = {
+#             name: getattr(self, name)
+#             for name in self.__slots__
+#             if name != "table"
+#         }
+#         self.table.delete(**column_value)
+
+#     def update(self) -> None:
+#         """Update this row."""
+#         if isinstance(self, dict):
+#             self.table.delete(**self)
+
+#         if self.table.id_exist:
+#             self.table.delete(id=self.id)
+#             return
+#         column_value = {
+#             name: getattr(self, name)
+#             for name in self.__slots__
+#             if name != "table"
+#         }
+#         self.table.delete(**column_value)
+
+#     def __setattr__(self, name: str, value: Any) -> None:
+#         if isinstance(self, dict):
+#             return super().__setattr__(name, value)
+        
 
 
 class RowDict(dict, _RowOperationMixin):

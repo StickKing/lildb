@@ -59,6 +59,8 @@ if __name__ == "__main__":
         print(i)
 
     print()
+    print()
+    # db.folder.update({})
 
     # for i in db.folder:
     #     print(i.title)

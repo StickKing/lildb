@@ -15,6 +15,7 @@ __all__ = (
     "Select",
     "Insert",
     "Delete",
+    "Update",
 )
 
 
@@ -35,6 +36,18 @@ class Operation:
             if isinstance(value, str)
             else f"{key} = {value}"
             for key, value in filter_by.items()
+        )
+
+    def _make_comma_query(
+        self,
+        data: dict[str, int | bool | str | None],
+    ) -> str:
+        return ", ".join(
+            f"{key} = '{value}'"
+            if isinstance(value, str)
+            else f"{key} = {value}"
+            for key, value in data.items()
+            if key in self.table.column_names
         )
 
 
@@ -96,10 +109,10 @@ class Insert(Operation):
         query = ", ".join("?" for _ in item)
         return f"INSERT INTO {self.table.name} VALUES({query})"
 
-    def _prepare_item(self, item: dict[str, Any]) -> tuple:
+    def _prepare_input_data(self, data: dict[str, Any]) -> tuple:
         """Validate dict and create tuple for insert."""
         return tuple(
-            item[name] if name in item else None
+            data.get(name)
             for name in self.table.column_names
         )
 
@@ -107,11 +120,11 @@ class Insert(Operation):
         self,
         data: dict[str, Any] | Iterable[dict[str, Any]],
     ) -> Any:
-        """."""
+        """Insert-query for current table."""
         if isinstance(data, dict):
             data = (data,)
         insert_data = tuple(
-            self._prepare_item(item)
+            self._prepare_input_data(item)
             for item in data
         )
         if not all(insert_data):
@@ -154,4 +167,28 @@ class Delete(Operation):
 
 
 class Update(Operation):
-    pass
+    """Componen for updateing table row."""
+
+    @cached_property
+    def query(self) -> str:
+        """Return base str query."""
+        return f"UPDATE {self.table.name} SET "  # noqa: S608
+
+    def __call__(
+        self,
+        data: dict[str, int | bool | str | None],
+        **filter_by: int | bool | str | None,
+    ) -> None:
+        """Insert-query for current table."""
+        if not isinstance(data, dict):
+            msg = "Incorrect type for 'data.'"
+            raise TypeError(msg)
+        if not data:
+            msg = "Argument 'data' do not be empty."
+            raise ValueError(msg)
+        query = self.query + self._make_comma_query(data)
+        if filter_by:
+            query = f"{query} WHERE {self._make_and_query(filter_by)}"
+        self.table.cursor.execute(query)
+        self.table.db.commit()
+
