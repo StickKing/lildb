@@ -38,7 +38,6 @@ class Operation:
         )
 
 
-
 class Select(Operation):
     """Component for select and filtred DB data."""
 

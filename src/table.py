@@ -58,11 +58,7 @@ class Table:
     @cached_property
     def id_exist(self) -> bool:
         """Check exist id column."""
-        for name in self.column_names:
-            if name != "id":
-                continue
-            return True
-        return False
+        return "id" in self.column_names
 
     def all(self) -> list[dict[str, Any]]:
         """Get all rows from table."""

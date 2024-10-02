@@ -16,15 +16,13 @@ class _RowOperationMixin:
     def delete(self) -> None:
         """Delete this row from db."""
         if isinstance(self, dict):
-            id_ = self.get("id")
-            if id_:
-                self.table.delete(id=id_)
+            if self.table.id_exist:
+                self.table.delete(id=self["id"])
                 return
             self.table.delete(**self)
 
-        id_ = getattr(self, "id")  # noqa: B009
-        if id_:
-            self.table.delete(id=id_)
+        if self.table.id_exist:
+            self.table.delete(id=self.id)
             return
         column_value = {
             name: getattr(self, name)
