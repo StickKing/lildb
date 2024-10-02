@@ -1,9 +1,8 @@
 """Module contains row classes."""
 from __future__ import annotations
 
-from ast import arg
+from dataclasses import make_dataclass
 from typing import TYPE_CHECKING
-from typing import Any
 
 
 if TYPE_CHECKING:
@@ -12,12 +11,27 @@ if TYPE_CHECKING:
 
 class _RowOperationMixin:
 
+    __slots__ = ()
+
     def delete(self) -> None:
         """Delete this row from db."""
-        id = self.get("id")
-        if id is None:
+        if isinstance(self, dict):
+            id_ = self.get("id")
+            if id_:
+                self.table.delete(id=id_)
+                return
+            self.table.delete(**self)
+
+        id_ = getattr(self, "id")  # noqa: B009
+        if id_:
+            self.table.delete(id=id_)
             return
-        self.table.delete(id)
+        column_value = {
+            name: getattr(self, name)
+            for name in self.__slots__
+            if name != "table"
+        }
+        self.table.delete(**column_value)
 
 
 class RowDict(dict, _RowOperationMixin):
@@ -31,3 +45,17 @@ class RowDict(dict, _RowOperationMixin):
             raise TypeError(msg)
         super().__init__(kwargs)
 
+
+
+def make_row_data_cls(table: Table) -> type:
+    """Create data cls row for the transmitted table."""
+    data_cls = make_dataclass(
+        "RowDataClass",
+        [*table.column_names, "table"],
+        slots=True,
+    )
+    return type(
+        f"Row{table.name.title()}DataClass",
+        (data_cls, _RowOperationMixin),
+        {"__slots__": data_cls.__slots__},
+    )

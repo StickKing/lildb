@@ -1,8 +1,6 @@
 """Module contain components for work with db table."""
 from __future__ import annotations
 
-import sqlite3
-from dataclasses import make_dataclass
 from functools import cached_property
 from typing import TYPE_CHECKING
 from typing import Any
@@ -12,10 +10,12 @@ from operations import Delete
 from operations import Insert
 from operations import Select
 from rows import RowDict
-from rows import _RowOperationMixin
+from rows import make_row_data_cls
 
 
 if TYPE_CHECKING:
+    import sqlite3
+
     from .db import DB
 
 
@@ -38,16 +38,7 @@ class Table:
         self.delete = Delete(self)
 
         if data_class_row:
-            data_cls = make_dataclass(
-                "RowDataClass",
-                [*self.column_names, "table"],
-                slots=True,
-            )
-            self.row_cls = type(
-                f"Row{self.name.title()}DataClass",
-                (data_cls, _RowOperationMixin),
-                {},
-            )
+            self.row_cls = make_row_data_cls(self)
 
     @property
     def cursor(self) -> sqlite3.Cursor:
@@ -73,6 +64,10 @@ class Table:
             return True
         return False
 
+    def all(self) -> list[dict[str, Any]]:
+        """Get all rows from table."""
+        return self.select()
+
     def __iter__(self) -> Iterator[Any]:
         """Iterate through the row list."""
         return self.select().__iter__()
@@ -82,5 +77,5 @@ class Table:
         result = None
         if not self.id_exist:
             result = self.select()[index]
-        result = self.select.filter({"id": index})
+        result = self.select(id=index)
         return result[0] if result else None

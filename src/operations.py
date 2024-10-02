@@ -18,14 +18,28 @@ __all__ = (
 )
 
 
-class Opertion:
+class Operation:
     """Base operation."""
 
     def __init__(self, table: Table) -> None:
         self.table = table
 
+    def _make_and_query(
+        self,
+        filter_by: dict[str, int | bool | str | None],
+    ) -> str:
+        return " AND ".join(
+            f"{key} is NULL"
+            if value is None else
+            f"{key} = '{value}'"
+            if isinstance(value, str)
+            else f"{key} = {value}"
+            for key, value in filter_by.items()
+        )
 
-class Select(Opertion):
+
+
+class Select(Operation):
     """Component for select and filtred DB data."""
 
     @cached_property
@@ -33,16 +47,16 @@ class Select(Opertion):
         """Fetch base query."""
         return f"SELECT * FROM {self.table.name}"
 
-    def execute(self, query: str, size: int = 0) -> list[dict[str, Any]]:
+    def _execute(self, query: str, size: int = 0) -> list[dict[str, Any]]:
         """Execute with size."""
         result = None
         if size:
             result = self.table.cursor.execute(query).fetchmany(size)
         else:
             result = self.table.cursor.execute(query).fetchall()
-        return self.as_list_dict(result)
+        return self._as_list_row(result)
 
-    def as_list_dict(self, items: list[tuple[Any]]) -> list[dict[str, Any]]:
+    def _as_list_row(self, items: list[tuple[Any]]) -> list[dict[str, Any]]:
         """Create dict from data."""
         return [
             self.table.row_cls(
@@ -52,27 +66,30 @@ class Select(Opertion):
             for item in items
         ]
 
-    def filter(
+    def _filter(
         self,
-        filters: dict[str, str | int | bool],
+        filter_by: dict[str, str | int | bool | None],
         size: int = 0,
     ) -> list[dict[str, Any]]:
-        """Filter data by filters value where
+        """
+        Filter data by filters value where
         key is column name value is content.
         """
-        query_and: str = " AND ".join(
-            f"{key} = {item}"
-            if item is not None else f"{key} is NULL"
-            for key, item in filters.items()
-        )
-        query = f"{self.query} WHERE {query_and}"
-        return self.execute(query, size)
+        query = f"{self.query} WHERE {self._make_and_query(filter_by)}"
+        return self._execute(query, size)
 
-    def __call__(self, size: int = 0) -> Any:
-        return self.execute(self.query, size)
+    def __call__(
+        self,
+        size: int = 0,
+        **filter_by: int | str | bool,
+    ) -> list[dict[str, Any]]:
+        """Select-query for current table."""
+        if filter_by:
+            return self._filter(filter_by, size)
+        return self._execute(self.query, size)
 
 
-class Insert(Opertion):
+class Insert(Operation):
     """Component for insert data in DB."""
 
     def query(self, item: Iterable) -> str:
@@ -104,31 +121,38 @@ class Insert(Opertion):
         self.table.db.connect.commit()
 
 
-class Delete(Opertion):
+class Delete(Operation):
     """Component for delete row from db."""
 
     def query(self) -> str:
+        """Base delete query."""
         return f"DELETE FROM {self.table.name} WHERE id=?"
 
-    def filter(self, value: dict) -> None:
+    def _filter(self, filter_by: dict) -> None:
         """Filtred delete row from table."""
-        if not value:
+        if not filter_by:
             msg = "Value do not be empty."
             raise ValueError(msg)
-        query_and: str = " AND ".join(
-            f"{key} = {item}"
-            if item is not None else f"{key} is NULL"
-            for key, item in value.items()
-        )
+        query_and = self._make_and_query(filter_by)
         query = f"DELETE FROM {self.table.name} WHERE {query_and}"
         self.table.cursor.execute(query)
-        self.table.db.connect.commit()
+        self.table.db.commit()
 
-    def __call__(self, id_: int | Iterable[int]) -> None:
-        if not isinstance(id_, (int, Iterable)):
-            msg = "Wrong type."
-            raise TypeError(msg)
-        ids = (id_,)
-        ids = tuple((str(id_),) for id_ in ids)
-        self.table.cursor.executemany(self.query(), ids)
-        self.table.db.connect.commit()
+    def __call__(
+        self,
+        id: int | Iterable[int] | None = None,  # noqa: A002
+        **filter_by: str | bool | int | None,
+    ) -> None:
+        """Delete-query for current table."""
+        if isinstance(id, Iterable):
+            ids = tuple((str(id_),) for id_ in id)
+            self.table.cursor.executemany(self.query(), ids)
+            self.table.db.commit()
+            return
+        if id is not None:
+            filter_by["id"] = id
+        self._filter(filter_by)
+
+
+class Update(Operation):
+    pass
