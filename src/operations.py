@@ -73,6 +73,7 @@ class Select(Operation):
         return [
             self.table.row_cls(
                 table=self.table,
+                changed_columns=set(),
                 **dict(zip(self.table.column_names, item)),
             )
             for item in items

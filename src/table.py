@@ -10,6 +10,7 @@ from operations import Delete
 from operations import Insert
 from operations import Select
 from operations import Update
+from rows import ABCRow
 from rows import RowDict
 from rows import make_row_data_cls
 
@@ -70,7 +71,7 @@ class Table:
         """Iterate through the row list."""
         return self.select().__iter__()
 
-    def __getitem__(self, index: int | str) -> dict[str, Any] | None:
+    def __getitem__(self, index: int | str) -> ABCRow | RowDict:
         """Get row item by id or index in list."""
         result = None
         if not self.id_exist:

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import sqlite3
 from functools import cached_property
+from typing import TYPE_CHECKING
 from typing import Any
 from typing import Callable
 from typing import Iterator
@@ -32,7 +33,7 @@ class DB:
             setattr(
                 self,
                 name[0].lower(),
-                Table(self, name[0], data_class_row=True),
+                Table(self, name[0], data_class_row=False),
             )
         self.table_names = tuple(table_names)
 
@@ -53,15 +54,26 @@ class DB:
         pass
 
 
+    if TYPE_CHECKING:
+        def __getattr__(self, name: str) -> Table:
+            """Cringe for dynamic table."""
+            ...
+
+
 if __name__ == "__main__":
     db = DB("./local.db")
     for i in db.folder:
         print(i)
 
-    print()
-    print()
-    # db.folder.update({})
 
-    # for i in db.folder:
-    #     print(i.title)
+    print()
+    row = db.folder[3]
+    print(row)
+    row["title"] = "World"
+    row.update()
+    print(row)
+    print(row.changed_columns)
+
+    for i in db.folder:
+        print(i)
 
