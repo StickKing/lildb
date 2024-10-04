@@ -18,23 +18,30 @@ class ABCRow(ABC):
     table: Table
     changed_columns: set
 
-    @abstractmethod
-    def __init__(self) -> None:
-        ...
-
     @property
     @abstractmethod
     def not_changed_column_values(self) -> dict[str, Any]:
         """Fetch not changed column name with value like dict."""
+        ...
+    
+    @property
+    @abstractmethod
+    def changed_column_values(self) -> dict[str, Any]:
+        """Fetch changed column name with value like dict."""
         ...
 
     def delete(self) -> None:
         """Delete this row from db."""
         self.table.delete(**self.not_changed_column_values)
 
-    def update(self) -> None:
+    def change(self) -> None:
         """Update this row."""
-        self.table.update(**self.not_changed_column_values)
+        if not self.changed_columns:
+            return
+        self.table.update(
+            self.changed_column_values,
+            **self.not_changed_column_values,
+        )
         self.changed_columns = set()
 
 
@@ -50,14 +57,27 @@ class _RowDataClsMixin(ABCRow):
             for key in self.__slots__
             if key in not_change_column
         }
+    
+    @property
+    def changed_column_values(self) -> dict[str, Any]:
+        """Fetch changed column name with value like dict."""
+        return {
+            key: getattr(self, key)
+            for key in self.__slots__
+            if key in self.changed_columns
+        }
 
     def __setattr__(self, name: str, value: Any) -> None:
-        if getattr(self, name) != value:
-            self.changed_columns.add(name)
-        return super().__setattr__(name, value)
+        if hasattr(self, name):
+            old_value = getattr(self, name)
+            super().__setattr__(name, value)
+            if value != old_value:
+                self.changed_columns.add(name)
+            return
+        super().__setattr__(name, value)
 
 
-class RowDict(dict):
+class RowDict(ABCRow, dict):
     """DB row like a dict."""
 
     def __init__(
@@ -84,9 +104,18 @@ class RowDict(dict):
             if key in not_change_column
         }
 
+    @property
+    def changed_column_values(self) -> dict[str, Any]:
+        """Fetch changed column name with value like dict."""
+        return {
+            key: value
+            for key, value in self.items()
+            if key in self.changed_columns
+        }
+
     def __setitem__(self, key: str, value: int | str | bool) -> None:
         """Check changes columns."""
-        if self[key] != value:
+        if self[key] != value and key in self.table.column_names:
             self.changed_columns.add(key)
         super().__setitem__(key, value)
 
