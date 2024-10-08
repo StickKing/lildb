@@ -23,7 +23,7 @@ class ABCRow(ABC):
     def not_changed_column_values(self) -> dict[str, Any]:
         """Fetch not changed column name with value like dict."""
         ...
-    
+
     @property
     @abstractmethod
     def changed_column_values(self) -> dict[str, Any]:
@@ -57,7 +57,7 @@ class _RowDataClsMixin(ABCRow):
             for key in self.__slots__
             if key in not_change_column
         }
-    
+
     @property
     def changed_column_values(self) -> dict[str, Any]:
         """Fetch changed column name with value like dict."""

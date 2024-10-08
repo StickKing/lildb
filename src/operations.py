@@ -25,11 +25,23 @@ class Operation:
     def __init__(self, table: Table) -> None:
         self.table = table
 
-    def _make_and_query(
+    def _make_operator_query(
         self,
         filter_by: dict[str, int | bool | str | None],
-    ) -> str:
-        return " AND ".join(
+        operator: str = "AND",
+        with_values: bool = False,  # noqa: FBT001, FBT002, ARG002
+    ) -> tuple[str, tuple[Any]] | str:
+        if operator.lower() not in {"and", "or", " ,"}:
+            msg = "Incorrect operator."
+            raise ValueError(msg)
+        operator = f" {operator} "
+        if not with_values:
+            query = f" {operator} ".join(
+                f"{key} is NULL" if value is None else f"{key} = ?"
+                for key, value in filter_by.items()
+            )
+            return (query, tuple(filter(None, filter_by.values())))
+        return f" {operator} ".join(
             f"{key} is NULL"
             if value is None else
             f"{key} = '{value}'"
@@ -38,17 +50,6 @@ class Operation:
             for key, value in filter_by.items()
         )
 
-    def _make_comma_query(
-        self,
-        data: dict[str, int | bool | str | None],
-    ) -> str:
-        return ", ".join(
-            f"{key} = '{value}'"
-            if isinstance(value, str)
-            else f"{key} = {value}"
-            for key, value in data.items()
-            if key in self.table.column_names
-        )
 
 
 class Select(Operation):
@@ -59,13 +60,24 @@ class Select(Operation):
         """Fetch base query."""
         return f"SELECT * FROM {self.table.name}"
 
-    def _execute(self, query: str, size: int = 0) -> list[dict[str, Any]]:
+    def _execute(
+        self,
+        query: str,
+        parameters: Iterable[Any],
+        size: int = 0,
+    ) -> list[dict[str, Any]]:
         """Execute with size."""
         result = None
         if size:
-            result = self.table.cursor.execute(query).fetchmany(size)
+            result = self.table.cursor.execute(
+                query,
+                parameters,
+            ).fetchmany(size)
         else:
-            result = self.table.cursor.execute(query).fetchall()
+            result = self.table.cursor.execute(
+                query,
+                parameters,
+            ).fetchall()
         return self._as_list_row(result)
 
     def _as_list_row(self, items: list[tuple[Any]]) -> list[dict[str, Any]]:
@@ -83,23 +95,28 @@ class Select(Operation):
         self,
         filter_by: dict[str, str | int | bool | None],
         size: int = 0,
+        operator: str = "AND",
     ) -> list[dict[str, Any]]:
-        """
-        Filter data by filters value where
+        """Filter data by filters value where
         key is column name value is content.
         """
-        query = f"{self.query} WHERE {self._make_and_query(filter_by)}"
-        return self._execute(query, size)
+        operator_query, parameters = self._make_operator_query(
+            filter_by,
+            operator,
+        )
+        query = f"{self.query} WHERE {operator_query}"
+        return self._execute(str(query), parameters, size)
 
     def __call__(
         self,
         size: int = 0,
+        operator: str = "AND",
         **filter_by: int | str | bool,
     ) -> list[dict[str, Any]]:
         """Select-query for current table."""
         if filter_by:
-            return self._filter(filter_by, size)
-        return self._execute(self.query, size)
+            return self._filter(filter_by, size, operator)
+        return self._execute(self.query, (), size)
 
 
 class Insert(Operation):
@@ -146,9 +163,9 @@ class Delete(Operation):
         if not filter_by:
             msg = "Value do not be empty."
             raise ValueError(msg)
-        query_and = self._make_and_query(filter_by)
+        query_and, parameters = self._make_operator_query(filter_by)
         query = f"DELETE FROM {self.table.name} WHERE {query_and}"
-        self.table.cursor.execute(query)
+        self.table.cursor.execute(query, parameters)
         self.table.db.commit()
 
     def __call__(
@@ -187,9 +204,15 @@ class Update(Operation):
         if not data:
             msg = "Argument 'data' do not be empty."
             raise ValueError(msg)
-        query = self.query + self._make_comma_query(data)
+        query_coma, parameters = self._make_operator_query(data, operator=" ,")
+        query_operator = self._make_operator_query(
+            filter_by,
+            with_values=True,
+        )
+        query = self.query + query_coma
         if filter_by:
-            query = f"{query} WHERE {self._make_and_query(filter_by)}"
-        self.table.cursor.execute(query)
+            query = f"{query} WHERE {query_operator}"
+        print(query)
+        self.table.cursor.execute(query, parameters)
         self.table.db.commit()
 

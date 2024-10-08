@@ -71,7 +71,7 @@ class Table:
         """Iterate through the row list."""
         return self.select().__iter__()
 
-    def __getitem__(self, index: int | str) -> ABCRow | RowDict:
+    def __getitem__(self, index: int | str) -> ABCRow | RowDict | None:
         """Get row item by id or index in list."""
         result = None
         if not self.id_exist:
