@@ -8,33 +8,50 @@ from typing import Any
 from typing import Callable
 from typing import Iterator
 
+from operations import CreateTable
 from table import Table
 
 
 class DB:
     """DB component."""
 
-    def __init__(self, path: str) -> None:
+    def __init__(
+        self,
+        path: str,
+        *,
+        use_datacls: bool = False,
+        **connect_params: Any,
+    ) -> None:
         """Initialize DB create connection and cursor."""
         self.path = path
-        self.connect: sqlite3.Connection = sqlite3.connect(path)
+        self.connect: sqlite3.Connection = sqlite3.connect(
+            path,
+            **connect_params,
+        )
         self.cursor: sqlite3.Cursor = self.connect.cursor()
 
+        self.execute: sqlite3.Cursor = self.cursor.execute
         self.commit: Callable[[], None] = self.connect.commit
-        self.initialize_tables()
+        self.initialize_tables(use_datacls=use_datacls)
 
-    def initialize_tables(self) -> None:
+        self.create_table = CreateTable(self)
+
+    def initialize_tables(self, *, use_datacls: bool = False) -> None:
         """Initialized all db tables."""
         table_names = []
         stmt = "SELECT name FROM sqlite_master WHERE type='table';"
         result = self.cursor.execute(stmt)
+
         for name in result.fetchall():
             table_names.append(name[0])
+            if hasattr(self, name[0].lower()):
+                continue
             setattr(
                 self,
                 name[0].lower(),
-                Table(self, name[0], data_class_row=False),
+                Table(self, name[0], use_datacls=use_datacls),
             )
+
         self.table_names = tuple(table_names)
 
     @cached_property

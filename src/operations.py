@@ -7,10 +7,18 @@ from functools import cached_property
 from typing import TYPE_CHECKING
 from typing import Any
 from typing import Iterable
+from typing import Literal
+from typing import MutableMapping
+from typing import TypeAlias
 
 
 if TYPE_CHECKING:
+    from db import DB
+    from rows import ABCRow
     from table import Table
+
+    TOperator: TypeAlias = Literal["AND", "and", "OR", "or", ","]
+    TQueryData: TypeAlias = dict[str, int | bool | str | None]
 
 
 __all__ = (
@@ -24,13 +32,14 @@ __all__ = (
 class Operation(ABC):
     """Base operation."""
 
-    def __init__(self, table: Table) -> None:
-        self.table = table
+    @abstractmethod
+    def __init__(self) -> None:
+        ...
 
     def _make_operator_query(
         self,
-        data: dict[str, int | bool | str | None],
-        operator: str = "AND",
+        data: TQueryData,
+        operator: TOperator = "AND",
         without_parameters: bool = False,  # noqa: FBT001, FBT002, ARG002
     ) -> str:
         if operator.lower() not in {"and", "or", ","}:
@@ -57,7 +66,43 @@ class Operation(ABC):
         ...
 
 
-class Select(Operation):
+class TableOperation(Operation, ABC):
+    """Base operation."""
+
+    def __init__(self, table: Table) -> None:
+        self.table = table
+
+    def _make_operator_query(
+        self,
+        data: TQueryData,
+        operator: TOperator = "AND",
+        without_parameters: bool = False,  # noqa: FBT001, FBT002, ARG002
+    ) -> str:
+        if operator.lower() not in {"and", "or", ","}:
+            msg = "Incorrect operator."
+            raise ValueError(msg)
+
+        if not without_parameters:
+            return f" {operator} ".join(
+                f"{key} is NULL" if value is None else f"{key} = :{key}"
+                for key, value in data.items()
+            )
+
+        return f" {operator} ".join(
+            f"{key} is NULL"
+            if value is None else
+            f"{key} = '{value}'"
+            if isinstance(value, str)
+            else f"{key} = {value}"
+            for key, value in data.items()
+        )
+
+    @abstractmethod
+    def __call__(self, *args: Any, **kwds: Any) -> Any:
+        ...
+
+
+class Select(TableOperation):
     """Component for select and filtred DB data."""
 
     @cached_property
@@ -68,9 +113,9 @@ class Select(Operation):
     def _execute(
         self,
         query: str,
-        parameters: Iterable[Any],
+        parameters: TQueryData,
         size: int = 0,
-    ) -> list[dict[str, Any]]:
+    ) -> list[ABCRow]:
         """Execute with size."""
         result = None
         if size:
@@ -78,14 +123,14 @@ class Select(Operation):
                 query,
                 parameters,
             ).fetchmany(size)
-        else:
-            result = self.table.cursor.execute(
-                query,
-                parameters,
-            ).fetchall()
+            return self._as_list_row(result)
+        result = self.table.cursor.execute(
+            query,
+            parameters,
+        ).fetchall()
         return self._as_list_row(result)
 
-    def _as_list_row(self, items: list[tuple[Any]]) -> list[dict[str, Any]]:
+    def _as_list_row(self, items: list[tuple[Any]]) -> list[ABCRow]:
         """Create dict from data."""
         return [
             self.table.row_cls(
@@ -98,10 +143,10 @@ class Select(Operation):
 
     def _filter(
         self,
-        filter_by: dict[str, str | int | bool | None],
+        filter_by: TQueryData,
         size: int = 0,
-        operator: str = "AND",
-    ) -> list[dict[str, Any]]:
+        operator: TOperator = "AND",
+    ) -> list[ABCRow]:
         """
         Filter data by filters value where
         key is column name value is content.
@@ -116,16 +161,16 @@ class Select(Operation):
     def __call__(
         self,
         size: int = 0,
-        operator: str = "AND",
-        **filter_by: dict[str, str | int | bool | None],
-    ) -> list[dict[str, Any]]:
+        operator: TOperator = "AND",
+        **filter_by: TQueryData,
+    ) -> list[ABCRow]:
         """Select-query for current table."""
         if filter_by:
             return self._filter(filter_by, size, operator)
-        return self._execute(self.query, (), size)
+        return self._execute(self.query, {}, size)
 
 
-class Insert(Operation):
+class Insert(TableOperation):
     """Component for insert data in DB."""
 
     def query(self, item: Iterable) -> str:
@@ -133,7 +178,7 @@ class Insert(Operation):
         query = ", ".join("?" for _ in item)
         return f"INSERT INTO {self.table.name} VALUES({query})"
 
-    def _prepare_input_data(self, data: dict[str, Any]) -> tuple:
+    def _prepare_input_data(self, data: Iterable[TQueryData]) -> tuple:
         """Validate dict and create tuple for insert."""
         return tuple(
             data.get(name)
@@ -142,7 +187,7 @@ class Insert(Operation):
 
     def __call__(
         self,
-        data: dict[str, Any] | Iterable[dict[str, Any]],
+        data: TQueryData | Iterable[TQueryData],
     ) -> Any:
         """Insert-query for current table."""
         if isinstance(data, dict):
@@ -157,14 +202,14 @@ class Insert(Operation):
         self.table.db.connect.commit()
 
 
-class Delete(Operation):
+class Delete(TableOperation):
     """Component for delete row from db."""
 
     def query(self) -> str:
         """Base delete query."""
         return f"DELETE FROM {self.table.name} WHERE id=?"
 
-    def _filter(self, filter_by: dict) -> None:
+    def _filter(self, filter_by: TQueryData) -> None:
         """Filtred delete row from table."""
         if not filter_by:
             msg = "Value do not be empty."
@@ -177,7 +222,7 @@ class Delete(Operation):
     def __call__(
         self,
         id: int | Iterable[int] | None = None,  # noqa: A002
-        **filter_by: str | bool | int | None,
+        **filter_by: TQueryData,
     ) -> None:
         """Delete-query for current table."""
         if isinstance(id, Iterable):
@@ -190,8 +235,8 @@ class Delete(Operation):
         self._filter(filter_by)
 
 
-class Update(Operation):
-    """Componen for updateing table row."""
+class Update(TableOperation):
+    """Component for updating table row."""
 
     @cached_property
     def query(self) -> str:
@@ -200,8 +245,8 @@ class Update(Operation):
 
     def __call__(
         self,
-        data: dict[str, int | bool | str | None],
-        **filter_by: int | bool | str | None,
+        data: TQueryData,
+        **filter_by: TQueryData,
     ) -> None:
         """Insert-query for current table."""
         if not isinstance(data, dict):
@@ -221,3 +266,42 @@ class Update(Operation):
         self.table.cursor.execute(query, data)
         self.table.db.commit()
 
+
+class CreateTable(Operation):
+
+    query = "CREATE TABLE "
+
+    def __init__(self, db: DB) -> None:
+        self.db = db
+
+    def _check_column_type(self, columns: MutableMapping) -> dict[str, str]:
+        """Initialize type for columns."""
+        type_dict = {
+            int: "INTEGER",
+            float: "REAL",
+            str: "TEXT",
+            None: "NULL",
+        }
+        return [
+            f"{name} {type_dict.get(type_)}"
+            for name, type_ in columns.items()
+        ]
+
+    def __call__(
+        self,
+        table_name: str,
+        columns: Iterable[str] | MutableMapping[str, str],
+    ) -> None:
+        query = f"{self.query}{table_name}"
+
+        if isinstance(columns, list):
+            columns_query = ",".join(columns)
+            query = f"{query}({columns_query})"
+            self.db.execute(query)
+            self.db.commit()
+            return
+
+        columns_query = ",".join(self._check_column_type(columns))
+        query = f"{query} ({columns_query})"
+        self.db.execute(query)
+        self.db.commit()

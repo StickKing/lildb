@@ -19,18 +19,20 @@ if TYPE_CHECKING:
     import sqlite3
 
     from .db import DB
+    from .rows import ABCRow
 
 
 class Table:
-    """Conponent for work with table."""
+    """Component for work with table."""
 
-    row_cls = RowDict
+    row_cls: type[ABCRow] = RowDict
 
     def __init__(
         self,
         db: DB,
         name: str,
-        data_class_row: bool = False,
+        *,
+        use_datacls: bool = False,
     ) -> None:
         """Initialize."""
         self.db = db
@@ -40,7 +42,7 @@ class Table:
         self.delete = Delete(self)
         self.update = Update(self)
 
-        if data_class_row:
+        if use_datacls:
             self.row_cls = make_row_data_cls(self)
 
     @property
