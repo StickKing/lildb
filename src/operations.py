@@ -1,6 +1,8 @@
 """Module contains base operation classes."""
 from __future__ import annotations
 
+from abc import ABC
+from abc import abstractmethod
 from functools import cached_property
 from typing import TYPE_CHECKING
 from typing import Any
@@ -19,7 +21,7 @@ __all__ = (
 )
 
 
-class Operation:
+class Operation(ABC):
     """Base operation."""
 
     def __init__(self, table: Table) -> None:
@@ -27,29 +29,32 @@ class Operation:
 
     def _make_operator_query(
         self,
-        filter_by: dict[str, int | bool | str | None],
+        data: dict[str, int | bool | str | None],
         operator: str = "AND",
-        with_values: bool = False,  # noqa: FBT001, FBT002, ARG002
-    ) -> tuple[str, tuple[Any]] | str:
-        if operator.lower() not in {"and", "or", " ,"}:
+        without_parameters: bool = False,  # noqa: FBT001, FBT002, ARG002
+    ) -> str:
+        if operator.lower() not in {"and", "or", ","}:
             msg = "Incorrect operator."
             raise ValueError(msg)
-        operator = f" {operator} "
-        if not with_values:
-            query = f" {operator} ".join(
-                f"{key} is NULL" if value is None else f"{key} = ?"
-                for key, value in filter_by.items()
+
+        if not without_parameters:
+            return f" {operator} ".join(
+                f"{key} is NULL" if value is None else f"{key} = :{key}"
+                for key, value in data.items()
             )
-            return (query, tuple(filter(None, filter_by.values())))
+
         return f" {operator} ".join(
             f"{key} is NULL"
             if value is None else
             f"{key} = '{value}'"
             if isinstance(value, str)
             else f"{key} = {value}"
-            for key, value in filter_by.items()
+            for key, value in data.items()
         )
 
+    @abstractmethod
+    def __call__(self, *args: Any, **kwds: Any) -> Any:
+        ...
 
 
 class Select(Operation):
@@ -97,21 +102,22 @@ class Select(Operation):
         size: int = 0,
         operator: str = "AND",
     ) -> list[dict[str, Any]]:
-        """Filter data by filters value where
+        """
+        Filter data by filters value where
         key is column name value is content.
         """
-        operator_query, parameters = self._make_operator_query(
+        operator_query = self._make_operator_query(
             filter_by,
             operator,
         )
         query = f"{self.query} WHERE {operator_query}"
-        return self._execute(str(query), parameters, size)
+        return self._execute(str(query), filter_by, size)
 
     def __call__(
         self,
         size: int = 0,
         operator: str = "AND",
-        **filter_by: int | str | bool,
+        **filter_by: dict[str, str | int | bool | None],
     ) -> list[dict[str, Any]]:
         """Select-query for current table."""
         if filter_by:
@@ -163,9 +169,9 @@ class Delete(Operation):
         if not filter_by:
             msg = "Value do not be empty."
             raise ValueError(msg)
-        query_and, parameters = self._make_operator_query(filter_by)
+        query_and = self._make_operator_query(filter_by)
         query = f"DELETE FROM {self.table.name} WHERE {query_and}"
-        self.table.cursor.execute(query, parameters)
+        self.table.cursor.execute(query, filter_by)
         self.table.db.commit()
 
     def __call__(
@@ -204,15 +210,14 @@ class Update(Operation):
         if not data:
             msg = "Argument 'data' do not be empty."
             raise ValueError(msg)
-        query_coma, parameters = self._make_operator_query(data, operator=" ,")
+        query_coma = self._make_operator_query(data, operator=",")
         query_operator = self._make_operator_query(
             filter_by,
-            with_values=True,
+            without_parameters=True,
         )
         query = self.query + query_coma
         if filter_by:
             query = f"{query} WHERE {query_operator}"
-        print(query)
-        self.table.cursor.execute(query, parameters)
+        self.table.cursor.execute(query, data)
         self.table.db.commit()
 
