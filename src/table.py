@@ -29,21 +29,18 @@ class Table:
 
     def __init__(
         self,
-        db: DB,
         name: str,
         *,
         use_datacls: bool = False,
     ) -> None:
         """Initialize."""
-        self.db = db
         self.name = name
-        self.select = Select(self)
-        self.insert = Insert(self)
-        self.delete = Delete(self)
-        self.update = Update(self)
+        self.select = getattr(self, "select", Select)(self)
+        self.insert = getattr(self, "insert", Insert)(self)
+        self.delete = getattr(self, "delete", Delete)(self)
+        self.update = getattr(self, "update", Update)(self)
 
-        if use_datacls:
-            self.row_cls = make_row_data_cls(self)
+        self.use_datacls = use_datacls
 
     @property
     def cursor(self) -> sqlite3.Cursor:
@@ -65,7 +62,7 @@ class Table:
         """Check exist id column."""
         return "id" in self.column_names
 
-    def all(self) -> list[dict[str, Any]]:
+    def all(self) -> list[ABCRow]:
         """Get all rows from table."""
         return self.select()
 
@@ -80,3 +77,18 @@ class Table:
             result = self.select()[index]
         result = self.select(id=index)
         return result[0] if result else None
+
+    def drop(self) -> None:
+        """Drope this table."""
+        self.db.execute(f"DROP TABLE IF EXISTS {self.name}")
+        self.db.commit()
+
+    def __repr__(self) -> str:
+        """Repr view."""
+        return f"<{self.__class__.__name__}: {self.name.title()}>"
+
+    def __call__(self, db: DB) -> None:
+        """Prepare table obj."""
+        self.db = db
+        if self.use_datacls:
+            self.row_cls = make_row_data_cls(self)

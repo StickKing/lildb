@@ -10,6 +10,8 @@ from typing import Iterable
 from typing import Literal
 from typing import MutableMapping
 from typing import TypeAlias
+from typing import Sequence
+from column_types import BaseType
 
 
 if TYPE_CHECKING:
@@ -269,39 +271,80 @@ class Update(TableOperation):
 
 class CreateTable(Operation):
 
-    query = "CREATE TABLE "
-
     def __init__(self, db: DB) -> None:
         self.db = db
 
-    def _check_column_type(self, columns: MutableMapping) -> dict[str, str]:
-        """Initialize type for columns."""
-        type_dict = {
-            int: "INTEGER",
-            float: "REAL",
-            str: "TEXT",
-            None: "NULL",
-        }
-        return [
-            f"{name} {type_dict.get(type_)}"
-            for name, type_ in columns.items()
-        ]
+    def query(
+        self,
+        *,
+        if_not_exists: bool = True,
+    ) -> Literal["CREATE TABLE IF NOT EXISTS ", "CREATE TABLE "]:
+        """Return base SQL command."""
+        query = "CREATE TABLE "
+        if if_not_exists:
+            query += "IF NOT EXISTS "
+        return query
 
     def __call__(
         self,
         table_name: str,
-        columns: Iterable[str] | MutableMapping[str, str],
+        columns: Sequence[str] | MutableMapping[str, str],
+        table_primary_key: Sequence[str] | None = None,
+        *,
+        if_not_exists: bool = True,
     ) -> None:
-        query = f"{self.query}{table_name}"
+        """Create table in DB.
 
-        if isinstance(columns, list):
-            columns_query = ",".join(columns)
-            query = f"{query}({columns_query})"
+        Args:
+            table_name (str): table name
+            columns (Sequence[str] | MutableMapping[str, str]): column name or
+            dict column with column types
+            table_primary_key (Sequence[str] | None): set table primary key.
+            Defaults to None.
+            if_not_exists (bool): use 'if not exists' in query.
+            Defaults to True.
+
+        Raises:
+            TypeError: Incorrect type for columns
+            TypeError: Incorrect type for column item
+
+        """
+        query = f"{self.query(if_not_exists=if_not_exists)}{table_name}"
+
+        if not isinstance(columns, (Sequence, MutableMapping)):
+            msg = "Incorrect type for columns"
+            raise TypeError(msg)
+
+        primary_key: str = ""
+
+        if isinstance(table_primary_key, Sequence):
+            primary_key = ", PRIMARY KEY(" + ",".join(
+                _ for _ in table_primary_key
+            ) + ")"
+
+        if (
+            isinstance(columns, Sequence) and
+            all(isinstance(_, str) for _ in columns)
+        ):
+            columns_query = ", ".join(columns)
+            query = f"{query}({columns_query}{primary_key})"
             self.db.execute(query)
             self.db.commit()
+            self.db.initialize_tables()
             return
 
-        columns_query = ",".join(self._check_column_type(columns))
-        query = f"{query} ({columns_query})"
+        if (
+            not isinstance(columns, MutableMapping) or
+            not all(isinstance(_, BaseType) for _ in columns.values())
+        ):
+            msg = "Incorrect type for column item"
+            raise TypeError(msg)
+
+        columns_query = ", ".join(
+            f"{key} {value}"
+            for key, value in columns.items()
+        )
+        query = f"{query} ({columns_query}{primary_key})"
         self.db.execute(query)
         self.db.commit()
+        self.db.initialize_tables()
