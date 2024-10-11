@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "LiteDD"
+name = "LilDB"
 version = "0.0.1"
 description = ""
 authors = ["Anton Panteleev <mainsample@yandex.ru>"]
