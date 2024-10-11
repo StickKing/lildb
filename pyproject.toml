@@ -5,6 +5,7 @@ description = "LilDB provides a simplified wrapper for SQLite3."
 authors = ["Anton Panteleev <mainsample@yandex.ru>"]
 readme = "README.md"
 license = "MIT"
+packages = [{include = "lildb"}]
 
 [tool.poetry.dependencies]
 python = "^3.10"

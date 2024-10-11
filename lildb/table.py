@@ -6,13 +6,13 @@ from typing import TYPE_CHECKING
 from typing import Any
 from typing import Iterator
 
-from operations import Delete
-from operations import Insert
-from operations import Select
-from operations import Update
-from rows import ABCRow
-from rows import RowDict
-from rows import make_row_data_cls
+from .operations import Delete
+from .operations import Insert
+from .operations import Select
+from .operations import Update
+from .rows import ABCRow
+from .rows import RowDict
+from .rows import make_row_data_cls
 
 
 if TYPE_CHECKING:

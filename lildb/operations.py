@@ -12,13 +12,13 @@ from typing import MutableMapping
 from typing import Sequence
 from typing import TypeAlias
 
-from column_types import BaseType
+from .column_types import BaseType
 
 
 if TYPE_CHECKING:
-    from db import DB
-    from rows import ABCRow
-    from table import Table
+    from .db import DB
+    from .rows import ABCRow
+    from .table import Table
 
     TOperator: TypeAlias = Literal["AND", "and", "OR", "or", ","]
     TQueryData: TypeAlias = dict[str, int | bool | str | None]

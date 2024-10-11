@@ -9,8 +9,8 @@ from typing import Callable
 from typing import ClassVar
 from typing import Iterator
 
-from operations import CreateTable
-from table import Table
+from .operations import CreateTable
+from .table import Table
 
 
 __all__ = (
