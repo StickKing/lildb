@@ -22,6 +22,11 @@ if TYPE_CHECKING:
     from .rows import ABCRow
 
 
+__all__ = (
+    "Table",
+)
+
+
 class Table:
     """Component for work with table."""
 

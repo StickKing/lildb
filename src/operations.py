@@ -9,8 +9,9 @@ from typing import Any
 from typing import Iterable
 from typing import Literal
 from typing import MutableMapping
-from typing import TypeAlias
 from typing import Sequence
+from typing import TypeAlias
+
 from column_types import BaseType
 
 
@@ -28,6 +29,7 @@ __all__ = (
     "Insert",
     "Delete",
     "Update",
+    "CreateTable",
 )
 
 
@@ -212,7 +214,7 @@ class Delete(TableOperation):
         return f"DELETE FROM {self.table.name} WHERE id=?"
 
     def _filter(self, filter_by: TQueryData) -> None:
-        """Filtred delete row from table."""
+        """Filter delete row from table."""
         if not filter_by:
             msg = "Value do not be empty."
             raise ValueError(msg)
@@ -293,7 +295,8 @@ class CreateTable(Operation):
         *,
         if_not_exists: bool = True,
     ) -> None:
-        """Create table in DB.
+        """
+        Create table in DB.
 
         Args:
             table_name (str): table name

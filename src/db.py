@@ -6,11 +6,16 @@ from functools import cached_property
 from typing import TYPE_CHECKING
 from typing import Any
 from typing import Callable
-from typing import Iterator
 from typing import ClassVar
+from typing import Iterator
 
 from operations import CreateTable
 from table import Table
+
+
+__all__ = (
+    "DB",
+)
 
 
 class DB:
@@ -95,36 +100,4 @@ class DB:
 
 if __name__ == "__main__":
     db = DB("./local.db")
-    # for i in db.folder:
-    #     print(i)
-
-
-    print()
-    #row = db.folder[3]
-    #print(row)
-    #row["title"] = "World"
-    #row.update()
-    # print(row)
-    # print(row.changed_columns)
-
-    # for i in db.link:
-    #     print(i)
-
-    from column_types import Integer, Text, Blob, Real
-    # print(db.tables)
-    # print(db.table_names)
-    # print()
-    # print()
-    # columns = {
-    #     "int": Integer(default=10, unique=True, nullable=False),
-    #     "txt": Text(default="hello", unique=True, nullable=False),
-    #     "blb": Blob(unique=True, nullable=False),
-    #     "rlr": Real(default=20.25, unique=True),
-    # }
-    # db.create_table("AAAA", columns, table_primary_key=["int", "txt", "blb", "rlr"], if_not_exists=False)
-    # db.drop_tables()
-    # print(db.tables)
-    # print(db.table_names)
-
-    # print(db.nena_table)
 

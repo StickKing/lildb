@@ -5,6 +5,15 @@ from collections import UserString
 from numbers import Number
 
 
+__all__ = (
+    "BaseType",
+    "Integer",
+    "Real",
+    "Text",
+    "Blob",
+)
+
+
 class BaseType(UserString):
     """Base column type."""
 
@@ -17,7 +26,8 @@ class BaseType(UserString):
         unique: bool = False,
         nullable: bool = False,
     ) -> None:
-        """Initialize base params for abstract type.
+        """
+        Initialize base params for abstract type.
 
         Args:
             default (int | str | None): default value. Defaults to None.
@@ -57,7 +67,8 @@ class Integer(BaseType):
         nullable: bool = False,
         autoincrement: bool = False,
     ) -> None:
-        """Initialize base params for INTEGER.
+        """
+        Initialize base params for INTEGER.
 
         Args:
             default (int | str | None): default value. Defaults to None.
@@ -100,7 +111,8 @@ class Real(BaseType):
         unique: bool = False,
         nullable: bool = False,
     ) -> None:
-        """Initialize base params for REAL.
+        """
+        Initialize base params for REAL.
 
         Args:
             default (int | str | None): default value. Defaults to None.
@@ -134,7 +146,8 @@ class Text(BaseType):
         unique: bool = False,
         nullable: bool = False,
     ) -> None:
-        """Initialize base params for TEXT.
+        """
+        Initialize base params for TEXT.
 
         Args:
             default (int | str | None): default value. Defaults to None.
@@ -167,7 +180,8 @@ class Blob(BaseType):
         unique: bool = False,
         nullable: bool = False,
     ) -> None:
-        """Initialize base params for BLOB.
+        """
+        Initialize base params for BLOB.
 
         Args:
             default (int | str | None): default value. Defaults to None.
