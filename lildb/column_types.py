@@ -26,8 +26,7 @@ class BaseType(UserString):
         unique: bool = False,
         nullable: bool = False,
     ) -> None:
-        """
-        Initialize base params for abstract type.
+        """Initialize base params for abstract type.
 
         Args:
             default (int | str | None): default value. Defaults to None.
@@ -45,7 +44,10 @@ class BaseType(UserString):
     def __str__(self) -> str:
         """Create string column type."""
         if self.default:
-            self.data += f" DEFAULT {self.default} "
+            if isinstance(self.default, str):
+                self.data += f" DEFAULT '{self.default}' "
+            else:
+                self.data += f" DEFAULT {self.default} "
         if self.primary_key:
             self.data += " PRIMARY KEY "
         if not self.nullable:
@@ -67,8 +69,7 @@ class Integer(BaseType):
         nullable: bool = False,
         autoincrement: bool = False,
     ) -> None:
-        """
-        Initialize base params for INTEGER.
+        """Initialize base params for INTEGER.
 
         Args:
             default (int | str | None): default value. Defaults to None.
@@ -111,8 +112,7 @@ class Real(BaseType):
         unique: bool = False,
         nullable: bool = False,
     ) -> None:
-        """
-        Initialize base params for REAL.
+        """Initialize base params for REAL.
 
         Args:
             default (int | str | None): default value. Defaults to None.
@@ -146,8 +146,7 @@ class Text(BaseType):
         unique: bool = False,
         nullable: bool = False,
     ) -> None:
-        """
-        Initialize base params for TEXT.
+        """Initialize base params for TEXT.
 
         Args:
             default (int | str | None): default value. Defaults to None.
@@ -180,8 +179,7 @@ class Blob(BaseType):
         unique: bool = False,
         nullable: bool = False,
     ) -> None:
-        """
-        Initialize base params for BLOB.
+        """Initialize base params for BLOB.
 
         Args:
             default (int | str | None): default value. Defaults to None.

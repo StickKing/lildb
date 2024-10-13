@@ -45,6 +45,8 @@ class Table:
         self.delete = getattr(self, "delete", Delete)(self)
         self.update = getattr(self, "update", Update)(self)
 
+        self.add = self.insert
+
         self.use_datacls = use_datacls
 
     @property
@@ -81,6 +83,11 @@ class Table:
         if not self.id_exist:
             result = self.select()[index]
         result = self.select(id=index)
+        return result[0] if result else None
+
+    def get(self, **filter_by: str | int) -> ABCRow | RowDict | None:
+        """Get one row by filter."""
+        result = self.select(size=1, **filter_by)
         return result[0] if result else None
 
     def drop(self) -> None:

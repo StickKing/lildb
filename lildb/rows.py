@@ -4,8 +4,10 @@ from __future__ import annotations
 from abc import ABC
 from abc import abstractmethod
 from dataclasses import make_dataclass
-from typing import TYPE_CHECKING
+from dataclasses import field
+from typing import TYPE_CHECKING, NoReturn
 from typing import Any
+from sqlite3 import OperationalError
 
 
 if TYPE_CHECKING:
@@ -128,16 +130,48 @@ class RowDict(ABCRow, dict):
         super().__setitem__(key, value)
 
 
-
 def make_row_data_cls(table: Table) -> type:
     """Create data cls row for the transmitted table."""
+    attributes = [
+        (atr, Any, field(default=None))
+        for atr in [*table.column_names, "table", "changed_columns"]
+    ]
+
     data_cls = make_dataclass(
         "RowDataClass",
-        [*table.column_names, "table", "changed_columns"],
+        attributes,
         slots=True,
+        repr=False,
     )
+
+    def repr(self: data_cls) -> str:
+        """View sting by object."""
+        columns = ", ".join(
+            f"{atr_name}={getattr(self, atr_name)}"
+            for atr_name in self.__slots__
+            if atr_name not in {"table", "changed_columns"}
+        )
+        return f"{self.__class__.__name__}({columns})"
+
+    data_cls.__repr__ = repr
+
     return type(
         f"Row{table.name.title()}DataClass",
         (data_cls, _RowDataClsMixin),
         {"__slots__": data_cls.__slots__},
     )
+
+
+def create_result_row(cls: type[ABCRow]) -> type[ABCRow]:
+    """Create result row cls."""
+    row_cls = type(
+        "ResultRow",
+        (cls,),
+        {},
+    )
+    msg = "ResultRow cannot be changed"
+    def operation_error(self: row_cls) -> NoReturn:
+        """Change delete/update row method."""
+        raise OperationalError(msg)
+    row_cls.delete = row_cls.change = operation_error
+    return row_cls

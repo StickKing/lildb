@@ -12,6 +12,7 @@ from typing import MutableMapping
 from typing import Sequence
 from typing import TypeAlias
 
+from .rows import create_result_row
 from .column_types import BaseType
 
 
@@ -66,7 +67,7 @@ class Operation(ABC):
         )
 
     @abstractmethod
-    def __call__(self, *args: Any, **kwds: Any) -> Any:
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:  # noqa: ANN401
         ...
 
 
@@ -102,23 +103,29 @@ class TableOperation(Operation, ABC):
         )
 
     @abstractmethod
-    def __call__(self, *args: Any, **kwds: Any) -> Any:
+    def __call__(self) -> None:
         ...
 
 
 class Select(TableOperation):
     """Component for select and filtred DB data."""
 
-    @cached_property
-    def query(self) -> str:
+    def query(self, columns: Iterable[str] | None = None) -> str:
         """Fetch base query."""
-        return f"SELECT * FROM {self.table.name}"
+        if columns:
+            return "SELECT {} FROM {}".format(  # noqa: S608
+                ", ".join(columns),
+                self.table.name,
+            )
+        return f"SELECT * FROM {self.table.name}"  # noqa: S608
 
     def _execute(
         self,
         query: str,
         parameters: TQueryData,
+        *,
         size: int = 0,
+        columns: Iterable[str] | None = None,
     ) -> list[ABCRow]:
         """Execute with size."""
         result = None
@@ -127,20 +134,30 @@ class Select(TableOperation):
                 query,
                 parameters,
             ).fetchmany(size)
-            return self._as_list_row(result)
+            return self._as_list_row(result, columns=columns)
         result = self.table.cursor.execute(
             query,
             parameters,
         ).fetchall()
-        return self._as_list_row(result)
+        return self._as_list_row(result, columns=columns)
 
-    def _as_list_row(self, items: list[tuple[Any]]) -> list[ABCRow]:
+    def _as_list_row(
+        self,
+        items: Iterable[tuple[tuple[Any, ...]]],
+        *,
+        columns: Iterable[str] | None = None,
+    ) -> list[ABCRow]:
         """Create dict from data."""
+        row_cls = self.table.row_cls
+        if not columns:
+            columns = self.table.column_names
+        else:
+            row_cls = create_result_row(row_cls)
         return [
-            self.table.row_cls(
+            row_cls(
                 table=self.table,
                 changed_columns=set(),
-                **dict(zip(self.table.column_names, item)),
+                **dict(zip(columns, item)),
             )
             for item in items
         ]
@@ -148,45 +165,73 @@ class Select(TableOperation):
     def _filter(
         self,
         filter_by: TQueryData,
+        *,
         size: int = 0,
         operator: TOperator = "AND",
+        columns: Iterable[str] | None = None,
     ) -> list[ABCRow]:
-        """
-        Filter data by filters value where
+        """Filter data by filters value where
         key is column name value is content.
         """
         operator_query = self._make_operator_query(
             filter_by,
             operator,
         )
-        query = f"{self.query} WHERE {operator_query}"
-        return self._execute(str(query), filter_by, size)
+        query = f"{self.query(columns)} WHERE {operator_query}"
+        return self._execute(
+            query,
+            filter_by,
+            size=size,
+            columns=columns,
+        )
 
     def __call__(
         self,
+        *,
         size: int = 0,
         operator: TOperator = "AND",
+        columns: Iterable[str] | None = None,
+        condition: str | None = None,
         **filter_by: TQueryData,
     ) -> list[ABCRow]:
         """Select-query for current table."""
+        query = self.query(columns)
         if filter_by:
-            return self._filter(filter_by, size, operator)
-        return self._execute(self.query, {}, size)
+            return self._filter(
+                filter_by,
+                size=size,
+                operator=operator,
+                columns=columns,
+            )
+        if condition:
+            query = f"{query} WHERE {condition}"
+        return self._execute(query, {}, size=size, columns=columns)
 
 
 class Insert(TableOperation):
     """Component for insert data in DB."""
 
-    def query(self, item: Iterable) -> str:
+    def query(
+        self,
+        data: TQueryData | Iterable[TQueryData],
+    ) -> str:
         """Create insert sql-query."""
-        query = ", ".join("?" for _ in item)
-        return f"INSERT INTO {self.table.name} VALUES({query})"
+        query = ", ".join(
+            f":{key}"
+            for key in data[0]
+        )
+        colums_name = ", ".join(
+            name
+            for name in data[0]
+        )
+        return f"INSERT INTO {self.table.name} ({colums_name}) VALUES({query})"
 
     def _prepare_input_data(self, data: Iterable[TQueryData]) -> tuple:
         """Validate dict and create tuple for insert."""
         return tuple(
             data.get(name)
             for name in self.table.column_names
+            if name in data
         )
 
     def __call__(
@@ -194,15 +239,15 @@ class Insert(TableOperation):
         data: TQueryData | Iterable[TQueryData],
     ) -> Any:
         """Insert-query for current table."""
+        if not data:
+            msg = "Data do not be empty."
+            raise ValueError(msg)
         if isinstance(data, dict):
             data = (data,)
-        insert_data = tuple(
-            self._prepare_input_data(item)
-            for item in data
+        self.table.cursor.executemany(
+            self.query(data),
+            data,
         )
-        if not all(insert_data):
-            return
-        self.table.cursor.executemany(self.query(insert_data[0]), insert_data)
         self.table.db.connect.commit()
 
 
@@ -210,15 +255,20 @@ class Delete(TableOperation):
     """Component for delete row from db."""
 
     def query(self) -> str:
-        """Base delete query."""
+        """Fetch base delete query."""
         return f"DELETE FROM {self.table.name} WHERE id=?"
 
-    def _filter(self, filter_by: TQueryData) -> None:
+    def _filter(
+        self,
+        filter_by: TQueryData,
+        *,
+        operator: TOperator = "AND",
+    ) -> None:
         """Filter delete row from table."""
         if not filter_by:
             msg = "Value do not be empty."
             raise ValueError(msg)
-        query_and = self._make_operator_query(filter_by)
+        query_and = self._make_operator_query(filter_by, operator)
         query = f"DELETE FROM {self.table.name} WHERE {query_and}"
         self.table.cursor.execute(query, filter_by)
         self.table.db.commit()
@@ -226,6 +276,8 @@ class Delete(TableOperation):
     def __call__(
         self,
         id: int | Iterable[int] | None = None,  # noqa: A002
+        *,
+        operator: TOperator = "AND",
         **filter_by: TQueryData,
     ) -> None:
         """Delete-query for current table."""
@@ -236,7 +288,7 @@ class Delete(TableOperation):
             return
         if id is not None:
             filter_by["id"] = id
-        self._filter(filter_by)
+        self._filter(filter_by, operator=operator)
 
 
 class Update(TableOperation):
@@ -250,7 +302,8 @@ class Update(TableOperation):
     def __call__(
         self,
         data: TQueryData,
-        **filter_by: TQueryData,
+        operator: TOperator = "AND",
+        **filter_by: Any,
     ) -> None:
         """Insert-query for current table."""
         if not isinstance(data, dict):
@@ -262,6 +315,7 @@ class Update(TableOperation):
         query_coma = self._make_operator_query(data, operator=",")
         query_operator = self._make_operator_query(
             filter_by,
+            operator,
             without_parameters=True,
         )
         query = self.query + query_coma
@@ -272,6 +326,7 @@ class Update(TableOperation):
 
 
 class CreateTable(Operation):
+    """Create table object."""
 
     def __init__(self, db: DB) -> None:
         self.db = db
@@ -295,8 +350,7 @@ class CreateTable(Operation):
         *,
         if_not_exists: bool = True,
     ) -> None:
-        """
-        Create table in DB.
+        """Create table in DB.
 
         Args:
             table_name (str): table name
