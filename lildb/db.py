@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import sqlite3
 from functools import cached_property
+from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import Any
 from typing import Callable
 from typing import ClassVar
+from typing import Final
 from typing import Iterator
 
 from .operations import CreateTable
@@ -22,6 +24,30 @@ class DB:
     """DB component."""
 
     custom_tables: ClassVar[list[Table]]
+
+    _instances: Final[dict[str, DB]] = {}
+
+    def __new__(cls: type[DB], *args: Any, **kwargs: Any) -> DB:
+        """Use singleton template. Check path and match paths."""
+        if not args and kwargs.get("path") is None:
+            msg = "DB.__init__() missing 1 required argument: 'path'"
+            raise TypeError(msg)
+
+        path = kwargs["path"] if kwargs.get("path") else args[0]
+        normalized_path = cls.normalize_path(Path(path))
+
+        for inst_path, instance in cls._instances.items():
+            if cls.normalize_path(Path(inst_path)) == normalized_path:
+                return instance
+
+        new_instance = super().__new__(cls)
+        cls._instances[path] = new_instance
+        return cls._instances[path]
+
+    @classmethod
+    def normalize_path(cls: type[DB], path: Path) -> Path:
+        """Normalize path."""
+        return path.parent.resolve().joinpath(path.name)
 
     def __init__(
         self,
@@ -99,5 +125,5 @@ class DB:
 
 
 if __name__ == "__main__":
-    db = DB("./local.db")
+    db = DB("local")
 
