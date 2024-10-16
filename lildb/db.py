@@ -10,7 +10,10 @@ from typing import Callable
 from typing import ClassVar
 from typing import Final
 from typing import Iterator
+from typing import MutableMapping
+from typing import Sequence
 
+from .enumcls import ResultFetch
 from .operations import CreateTable
 from .table import Table
 
@@ -64,7 +67,6 @@ class DB:
         )
         self.cursor: sqlite3.Cursor = self.connect.cursor()
 
-        self.execute: sqlite3.Cursor = self.cursor.execute
         self.commit: Callable[[], None] = self.connect.commit
         self.use_datacls = use_datacls
         self.table_names: set = set()
@@ -117,6 +119,48 @@ class DB:
         for table in self.tables:
             table.drop()
         self.initialize_tables()
+
+    def execute(
+        self,
+        query: str,
+        parameters: MutableMapping | Sequence = (),
+        *,
+        many: bool = False,
+        size: int | None = None,
+        result: ResultFetch | None = None,
+    ) -> list[Any] | None:
+        """Single execute to simplify it.
+
+        Args:
+            query (str): sql query
+            parameters (MutableMapping | Sequence): data for executing.
+            Defaults to ().
+            many (bool): flag for executemany operation. Defaults to False.
+            size (int | None): size for fetchmany operation. Defaults to None.
+            result (ResultFetch | None): enum for fetch func. Defaults to None.
+        Returns:
+            list[Any] or None
+        """
+        command = query.partition(" ")[0].lower()
+        if many:
+            self.cursor.executemany(query, parameters)
+        else:
+            self.cursor.execute(query, parameters)
+
+        if command in {"insert", "delete", "update", "create", "drop"}:
+            self.commit()
+
+        # Check result
+        if result is None:
+            return
+
+        ResultFetch(result)
+
+        result_func: Callable = getattr(self.cursor, result.value)
+
+        if result.value == "fetchmany":
+            return result_func(size=size)
+        return result_func()
 
     if TYPE_CHECKING:
         def __getattr__(self, name: str) -> Table:

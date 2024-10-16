@@ -12,8 +12,9 @@ from typing import MutableMapping
 from typing import Sequence
 from typing import TypeAlias
 
-from .rows import create_result_row
 from .column_types import BaseType
+from .enumcls import ResultFetch
+from .rows import create_result_row
 
 
 if TYPE_CHECKING:
@@ -130,15 +131,18 @@ class Select(TableOperation):
         """Execute with size."""
         result = None
         if size:
-            result = self.table.cursor.execute(
+            result = self.table.execute(
                 query,
                 parameters,
-            ).fetchmany(size)
+                size=size,
+                result=ResultFetch.fetchmany,
+            )
             return self._as_list_row(result, columns=columns)
-        result = self.table.cursor.execute(
+        result = self.table.execute(
             query,
             parameters,
-        ).fetchall()
+            result=ResultFetch.fetchall,
+        )
         return self._as_list_row(result, columns=columns)
 
     def _as_list_row(
@@ -244,11 +248,7 @@ class Insert(TableOperation):
             raise ValueError(msg)
         if isinstance(data, dict):
             data = (data,)
-        self.table.cursor.executemany(
-            self.query(data),
-            data,
-        )
-        self.table.db.connect.commit()
+        self.table.execute(self.query(data), data, many=True)
 
 
 class Delete(TableOperation):
@@ -270,8 +270,7 @@ class Delete(TableOperation):
             raise ValueError(msg)
         query_and = self._make_operator_query(filter_by, operator)
         query = f"DELETE FROM {self.table.name} WHERE {query_and}"
-        self.table.cursor.execute(query, filter_by)
-        self.table.db.commit()
+        self.table.execute(query, filter_by)
 
     def __call__(
         self,
@@ -283,8 +282,7 @@ class Delete(TableOperation):
         """Delete-query for current table."""
         if isinstance(id, Iterable):
             ids = tuple((str(id_),) for id_ in id)
-            self.table.cursor.executemany(self.query(), ids)
-            self.table.db.commit()
+            self.table.execute(self.query(), ids, many=True)
             return
         if id is not None:
             filter_by["id"] = id
@@ -321,8 +319,7 @@ class Update(TableOperation):
         query = self.query + query_coma
         if filter_by:
             query = f"{query} WHERE {query_operator}"
-        self.table.cursor.execute(query, data)
-        self.table.db.commit()
+        self.table.execute(query, data)
 
 
 class CreateTable(Operation):
@@ -386,7 +383,6 @@ class CreateTable(Operation):
             columns_query = ", ".join(columns)
             query = f"{query}({columns_query}{primary_key})"
             self.db.execute(query)
-            self.db.commit()
             self.db.initialize_tables()
             return
 
@@ -403,5 +399,4 @@ class CreateTable(Operation):
         )
         query = f"{query} ({columns_query}{primary_key})"
         self.db.execute(query)
-        self.db.commit()
         self.db.initialize_tables()

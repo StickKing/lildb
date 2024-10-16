@@ -4,7 +4,10 @@ from __future__ import annotations
 from functools import cached_property
 from typing import TYPE_CHECKING
 from typing import Any
+from typing import Callable
 from typing import Iterator
+from typing import MutableMapping
+from typing import Sequence
 
 from .operations import Delete
 from .operations import Insert
@@ -19,6 +22,7 @@ if TYPE_CHECKING:
     import sqlite3
 
     from .db import DB
+    from .enumcls import ResultFetch
     from .rows import ABCRow
 
 
@@ -53,6 +57,25 @@ class Table:
     def cursor(self) -> sqlite3.Cursor:
         """Shortcut for cursor."""
         return self.db.cursor
+    
+    @property
+    def execute(
+        self,
+    ) -> Callable[[str, MutableMapping | Sequence, bool, ResultFetch], None]:
+        """Shortcut for execute.
+
+        Args:
+            query (str): sql query
+            parameters (MutableMapping | Sequence): data for executing.
+            Defaults to ().
+            many (bool): flag for executemany operation. Defaults to False.
+            size (int | None): size for fetchmany operation. Defaults to None.
+            result (ResultFetch | None): enum for fetch func. Defaults to None.
+        Returns:
+            list[Any] or None
+        """
+        return self.db.execute
+
 
     @cached_property
     def column_names(self) -> tuple[str, ...]:
@@ -60,7 +83,7 @@ class Table:
         stmt = f"SELECT name FROM PRAGMA_TABLE_INFO('{self.name}');"
         result = self.cursor.execute(stmt)
         return tuple(
-            name[0]
+            name[0].lower()
             for name in result.fetchall()
         )
 
