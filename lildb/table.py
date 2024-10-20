@@ -9,6 +9,7 @@ from typing import Iterator
 from typing import MutableMapping
 from typing import Sequence
 
+from .enumcls import ResultFetch
 from .operations import Delete
 from .operations import Insert
 from .operations import Select
@@ -22,7 +23,6 @@ if TYPE_CHECKING:
     import sqlite3
 
     from .db import DB
-    from .enumcls import ResultFetch
     from .rows import ABCRow
 
 
@@ -56,8 +56,8 @@ class Table:
     @property
     def cursor(self) -> sqlite3.Cursor:
         """Shortcut for cursor."""
-        return self.db.cursor
-    
+        return self.db.connect.cursor()
+
     @property
     def execute(
         self,
@@ -81,10 +81,10 @@ class Table:
     def column_names(self) -> tuple[str, ...]:
         """Fetch table column name."""
         stmt = f"SELECT name FROM PRAGMA_TABLE_INFO('{self.name}');"
-        result = self.cursor.execute(stmt)
+        result = self.db.execute(stmt, result=ResultFetch.fetchall)
         return tuple(
             name[0].lower()
-            for name in result.fetchall()
+            for name in result
         )
 
     @cached_property
@@ -116,7 +116,6 @@ class Table:
     def drop(self) -> None:
         """Drope this table."""
         self.db.execute(f"DROP TABLE IF EXISTS {self.name}")
-        self.db.commit()
 
     def __repr__(self) -> str:
         """Repr view."""

@@ -1,9 +1,14 @@
 """Module contain DB component."""
 from __future__ import annotations
 
+import logging
 import sqlite3
 from functools import cached_property
+from functools import singledispatchmethod
 from pathlib import Path
+from queue import Queue
+from threading import Event
+from threading import Thread
 from typing import TYPE_CHECKING
 from typing import Any
 from typing import Callable
@@ -20,6 +25,7 @@ from .table import Table
 
 __all__ = (
     "DB",
+    "DBThead",
 )
 
 
@@ -57,17 +63,17 @@ class DB:
         path: str,
         *,
         use_datacls: bool = False,
+        debug: bool = False,
         **connect_params: Any,
     ) -> None:
         """Initialize DB create connection and cursor."""
+        if debug:
+            logging.basicConfig(level=logging.DEBUG)
         self.path = path
         self.connect: sqlite3.Connection = sqlite3.connect(
             path,
             **connect_params,
         )
-        self.cursor: sqlite3.Cursor = self.connect.cursor()
-
-        self.commit: Callable[[], None] = self.connect.commit
         self.use_datacls = use_datacls
         self.table_names: set = set()
         self.initialize_tables()
@@ -77,7 +83,7 @@ class DB:
     def initialize_tables(self) -> None:
         """Initialize all db tables."""
         stmt = "SELECT name FROM sqlite_master WHERE type='table';"
-        result = self.cursor.execute(stmt)
+        result = self.execute(stmt, result=ResultFetch.fetchall)
 
         custom_tables = getattr(self, "custom_tables", [])
 
@@ -88,7 +94,7 @@ class DB:
             setattr(self, table.name.lower(), table)
             self.table_names.add(table.name)
 
-        for name in result.fetchall():
+        for name in result:
             if hasattr(self, name[0].lower()):
                 continue
             new_table = Table(name[0], use_datacls=self.use_datacls)
@@ -142,13 +148,14 @@ class DB:
             list[Any] or None
         """
         command = query.partition(" ")[0].lower()
+        cursor = self.connect.cursor()
         if many:
-            self.cursor.executemany(query, parameters)
+            cursor.executemany(query, parameters)
         else:
-            self.cursor.execute(query, parameters)
+            cursor.execute(query, parameters)
 
         if command in {"insert", "delete", "update", "create", "drop"}:
-            self.commit()
+            self.connect.commit()
 
         # Check result
         if result is None:
@@ -156,16 +163,113 @@ class DB:
 
         ResultFetch(result)
 
-        result_func: Callable = getattr(self.cursor, result.value)
+        result_func: Callable = getattr(cursor, result.value)
 
         if result.value == "fetchmany":
             return result_func(size=size)
         return result_func()
 
+    def close(self) -> None:
+        """Close connection."""
+        self.connect.close()
+
     if TYPE_CHECKING:
         def __getattr__(self, name: str) -> Table:
             """Cringe for dynamic table."""
             ...
+
+
+class Future:
+
+    def __init__(self) -> None:
+        self.event = Event()
+        self.exception: Exception | None = None
+        self.result: list[Any] | None = None
+
+    def wait(self) -> None:
+        self.event.wait()
+
+    @singledispatchmethod
+    def put(self, result: list[Any] | None) -> None:
+        """Write operation result."""
+        self.result = result
+        self.event.set()
+
+    @put.register(Exception)
+    def _(self, result: Exception) -> None:
+        """Write exception."""
+        self.exception = result
+        self.event.set()
+
+    def done(self) -> bool:
+        """Check operation complited."""
+        return self.event.is_set()
+
+
+class DBThead(DB):
+    """Thread safety db cls."""
+
+    def __init__(
+        self,
+        path: str,
+        *,
+        use_datacls: bool = False,
+        debug: bool = False,
+        **connect_params: Any,
+    ) -> None:
+        """Initialize DB create connection, cursor and worker thread."""
+        connect_params["check_same_thread"] = False
+        self.worker_event = Event()
+        self.worker_queue = Queue()
+        self.worker: Thread = Thread(
+            target=self.execute_worker,
+            daemon=True,
+        )
+        super().__init__(
+            path,
+            use_datacls=use_datacls,
+            debug=debug,
+            **connect_params,
+        )
+        self.worker.start()
+        if debug:
+            logging.basicConfig(level=logging.DEBUG)
+
+    def execute_worker(self) -> None:
+        """Worker for executing sql-query and return result."""
+        while not self.worker_event.is_set():
+            try:
+                future, args, kwargs = self.worker_queue.get()
+                result = super().execute(*args, **kwargs)
+                future.put(result)
+            except Exception as e:  # noqa: PERF203
+                logging.exception(
+                    "Error: %s, Arguments: %s, %s",
+                    e,
+                    args,
+                    kwargs,
+                )
+                future.put(e)
+                self.connect.rollback()
+            finally:
+                future.event.set()
+                self.worker_queue.task_done()
+
+    def execute(self, *args: Any, **kwargs: Any) -> list[Any] | None:
+        """Create future obj and sending args in worker."""
+        future = Future()
+        self.worker_queue.put((future, args, kwargs))
+        future.wait()
+        if future.done():
+            return future.result
+        return None
+
+    def close(self) -> None:
+        """Close connection."""
+        self.worker.join()
+        self.worker_event.set()
+        self.connect.close()
+
 
 
 if __name__ == "__main__":
