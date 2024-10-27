@@ -10,7 +10,6 @@ from typing import Iterable
 from typing import Literal
 from typing import MutableMapping
 from typing import Sequence
-from typing import TypeAlias
 
 from .column_types import BaseType
 from .enumcls import ResultFetch
@@ -22,8 +21,8 @@ if TYPE_CHECKING:
     from .rows import ABCRow
     from .table import Table
 
-    TOperator: TypeAlias = Literal["AND", "and", "OR", "or", ","]
-    TQueryData: TypeAlias = dict[str, int | bool | str | None]
+    TOperator = Literal["AND", "and", "OR", "or", ","]
+    TQueryData = dict[str, int | bool | str | None]
 
 
 __all__ = (

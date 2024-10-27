@@ -173,6 +173,15 @@ class DB:
         """Close connection."""
         self.connect.close()
 
+    def __enter__(self) -> DB:
+        """Create context manager."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Close connection."""
+        self.close()
+
+
     if TYPE_CHECKING:
         def __getattr__(self, name: str) -> Table:
             """Cringe for dynamic table."""
