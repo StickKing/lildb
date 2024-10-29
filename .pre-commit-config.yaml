@@ -11,7 +11,7 @@ repos:
     rev: v0.6.3
     hooks:
       - id: ruff
-        entry: ruff check -n --config ./pyproject.toml
+        entry: ruff check -n --config ./ruff.toml
 
   - repo: https://github.com/pycqa/isort
     rev: 5.11.5

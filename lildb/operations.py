@@ -45,8 +45,10 @@ class Operation(ABC):
         self,
         data: TQueryData,
         operator: TOperator = "AND",
-        without_parameters: bool = False,  # noqa: FBT001, FBT002, ARG002
+        *,
+        without_parameters: bool = False,
     ) -> str:
+        """Build an sql expression with 'and' and 'or' operators."""
         if operator.lower() not in {"and", "or", ","}:
             msg = "Incorrect operator."
             raise ValueError(msg)
@@ -67,7 +69,7 @@ class Operation(ABC):
         )
 
     @abstractmethod
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:  # noqa: ANN401
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
         ...
 
 
@@ -81,7 +83,8 @@ class TableOperation(Operation, ABC):
         self,
         data: TQueryData,
         operator: TOperator = "AND",
-        without_parameters: bool = False,  # noqa: FBT001, FBT002, ARG002
+        *,
+        without_parameters: bool = False,
     ) -> str:
         if operator.lower() not in {"and", "or", ","}:
             msg = "Incorrect operator."
@@ -103,7 +106,7 @@ class TableOperation(Operation, ABC):
         )
 
     @abstractmethod
-    def __call__(self) -> None:
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
         ...
 
 
@@ -173,8 +176,8 @@ class Select(TableOperation):
         operator: TOperator = "AND",
         columns: Iterable[str] | None = None,
     ) -> list[ABCRow]:
-        """Filter data by filters value where
-        key is column name value is content.
+        """Filter data by filters value where key is
+        column name value is content.
         """
         operator_query = self._make_operator_query(
             filter_by,
@@ -240,7 +243,7 @@ class Insert(TableOperation):
     def __call__(
         self,
         data: TQueryData | Iterable[TQueryData],
-    ) -> Any:
+    ) -> None:
         """Insert-query for current table."""
         if not data:
             msg = "Data do not be empty."
@@ -255,7 +258,7 @@ class Delete(TableOperation):
 
     def query(self) -> str:
         """Fetch base delete query."""
-        return f"DELETE FROM {self.table.name} WHERE id=?"
+        return f"DELETE FROM {self.table.name} WHERE id=?"  # noqa: S608
 
     def _filter(
         self,
@@ -268,7 +271,7 @@ class Delete(TableOperation):
             msg = "Value do not be empty."
             raise ValueError(msg)
         query_and = self._make_operator_query(filter_by, operator)
-        query = f"DELETE FROM {self.table.name} WHERE {query_and}"
+        query = f"DELETE FROM {self.table.name} WHERE {query_and}"  # noqa: S608
         self.table.execute(query, filter_by)
 
     def __call__(
@@ -325,6 +328,7 @@ class CreateTable(Operation):
     """Create table object."""
 
     def __init__(self, db: DB) -> None:
+        """Initialize."""
         self.db = db
 
     def query(

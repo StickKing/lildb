@@ -3,11 +3,12 @@ from __future__ import annotations
 
 from abc import ABC
 from abc import abstractmethod
-from dataclasses import make_dataclass
 from dataclasses import field
-from typing import TYPE_CHECKING, NoReturn
-from typing import Any
+from dataclasses import make_dataclass
 from sqlite3 import OperationalError
+from typing import TYPE_CHECKING
+from typing import Any
+from typing import NoReturn
 
 
 if TYPE_CHECKING:
@@ -63,22 +64,22 @@ class _RowDataClsMixin(ABCRow):
         """Fetch not changed column name with value like dict."""
         not_change_column = set(self.table.column_names) - self.changed_columns
         return {
-            key: getattr(self, key)
-            for key in self.__slots__
-            if key in not_change_column
+            name: getattr(self, name)
+            for name in self.table.column_names
+            if name in not_change_column
         }
 
     @property
     def changed_column_values(self) -> dict[str, Any]:
         """Fetch changed column name with value like dict."""
         return {
-            key: getattr(self, key)
-            for key in self.__slots__
-            if key in self.changed_columns
+            name: getattr(self, name)
+            for name in self.table.column_names
+            if name in self.changed_columns
         }
 
     def __setattr__(self, name: str, value: Any) -> None:
-        if hasattr(self, name):
+        if hasattr(self, name) and self.changed_columns is not None:
             old_value = getattr(self, name)
             super().__setattr__(name, value)
             if value != old_value:
@@ -137,28 +138,30 @@ def make_row_data_cls(table: Table) -> type:
         for atr in [*table.column_names, "table", "changed_columns"]
     ]
 
-    data_cls = make_dataclass(
-        "RowDataClass",
-        attributes,
-        slots=True,
-        repr=False,
-    )
-
     def repr(self: data_cls) -> str:
         """View sting by object."""
         columns = ", ".join(
             f"{atr_name}={getattr(self, atr_name)}"
-            for atr_name in self.__slots__
-            if atr_name not in {"table", "changed_columns"}
+            for atr_name in self.table.column_names
+            # if atr_name not in {"table", "changed_columns"}
         )
         return f"{self.__class__.__name__}({columns})"
+
+    data_cls = make_dataclass(
+        "RowDataClass",
+        attributes,
+        # slots=True,
+        repr=False,
+        namespace={"repr": repr},
+    )
 
     data_cls.__repr__ = repr
 
     return type(
         f"Row{table.name.title()}DataClass",
         (data_cls, _RowDataClsMixin),
-        {"__slots__": data_cls.__slots__},
+        {},
+        # {"__slots__": data_cls.__slots__},
     )
 
 

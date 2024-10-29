@@ -25,7 +25,7 @@ from .table import Table
 
 __all__ = (
     "DB",
-    "DBThead",
+    "ThreadDB",
 )
 
 
@@ -144,8 +144,10 @@ class DB:
             many (bool): flag for executemany operation. Defaults to False.
             size (int | None): size for fetchmany operation. Defaults to None.
             result (ResultFetch | None): enum for fetch func. Defaults to None.
+
         Returns:
             list[Any] or None
+
         """
         command = query.partition(" ")[0].lower()
         cursor = self.connect.cursor()
@@ -159,7 +161,7 @@ class DB:
 
         # Check result
         if result is None:
-            return
+            return None
 
         ResultFetch(result)
 
@@ -177,25 +179,28 @@ class DB:
         """Create context manager."""
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(self, **kwargs: Any) -> None:
         """Close connection."""
         self.close()
 
 
     if TYPE_CHECKING:
         def __getattr__(self, name: str) -> Table:
-            """Cringe for dynamic table."""
+            """Typing for runtime created table."""
             ...
 
 
 class Future:
+    """Future for managing query execution."""
 
     def __init__(self) -> None:
+        """Initialize."""
         self.event = Event()
         self.exception: Exception | None = None
         self.result: list[Any] | None = None
 
     def wait(self) -> None:
+        """Wait for execution."""
         self.event.wait()
 
     @singledispatchmethod
@@ -215,7 +220,7 @@ class Future:
         return self.event.is_set()
 
 
-class DBThead(DB):
+class ThreadDB(DB):
     """Thread safety db cls."""
 
     def __init__(
@@ -230,17 +235,17 @@ class DBThead(DB):
         connect_params["check_same_thread"] = False
         self.worker_event = Event()
         self.worker_queue = Queue()
-        self.worker: Thread = Thread(
+        self.worker = Thread(
             target=self.execute_worker,
             daemon=True,
         )
+        self.worker.start()
         super().__init__(
             path,
             use_datacls=use_datacls,
             debug=debug,
             **connect_params,
         )
-        self.worker.start()
         if debug:
             logging.basicConfig(level=logging.DEBUG)
 
@@ -249,6 +254,9 @@ class DBThead(DB):
         while not self.worker_event.is_set():
             try:
                 future, args, kwargs = self.worker_queue.get()
+                if kwargs.get("finish_worker"):
+                    self.worker_event.set()
+                    continue
                 result = super().execute(*args, **kwargs)
                 future.put(result)
             except Exception as e:  # noqa: PERF203
@@ -274,10 +282,10 @@ class DBThead(DB):
         return None
 
     def close(self) -> None:
-        """Close connection."""
+        """Close worker thread and close db connection."""
+        self.execute(finish_worker=True)
         self.worker.join()
-        self.worker_event.set()
-        self.connect.close()
+        super().close()
 
 
 

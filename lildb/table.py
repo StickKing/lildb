@@ -49,9 +49,10 @@ class Table:
         self.delete = getattr(self, "delete", Delete)(self)
         self.update = getattr(self, "update", Update)(self)
 
-        self.add = self.insert
-
         self.use_datacls = use_datacls
+
+        # sugar
+        self.add = self.insert
 
     @property
     def cursor(self) -> sqlite3.Cursor:
@@ -71,8 +72,10 @@ class Table:
             many (bool): flag for executemany operation. Defaults to False.
             size (int | None): size for fetchmany operation. Defaults to None.
             result (ResultFetch | None): enum for fetch func. Defaults to None.
+
         Returns:
             list[Any] or None
+
         """
         return self.db.execute
 
@@ -80,7 +83,7 @@ class Table:
     @cached_property
     def column_names(self) -> tuple[str, ...]:
         """Fetch table column name."""
-        stmt = f"SELECT name FROM PRAGMA_TABLE_INFO('{self.name}');"
+        stmt = f"SELECT name FROM PRAGMA_TABLE_INFO('{self.name}');"  # noqa: S608
         result = self.db.execute(stmt, result=ResultFetch.fetchall)
         return tuple(
             name[0].lower()

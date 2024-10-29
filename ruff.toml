@@ -1,7 +1,6 @@
 select = ["ALL"]
 line-length = 79
-ignore = [
-]
+ignore = ["ANN401", "I001"]
 
 [per-file-ignores]
 "__init__.py" = ["F401"]
