@@ -176,7 +176,7 @@ db.person.select(columns=["name", "id"])
 ```
 
 For more complex queries, use:
-```
+```python
 db.person.select(condition="salary < 15")
 # Equivalent to 'SELECT * FROM Person WHERE salary < 15'
 
@@ -205,7 +205,7 @@ Update column value in all rows
 db.person.update({"salary": 100})
 ```
 
-```
+```python
 # Change David post
 db.person.update({"post": "Admin"}, id=1)
 ```
