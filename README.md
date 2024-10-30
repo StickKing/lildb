@@ -6,7 +6,7 @@ LilDB provides a simplified wrapper for SQLite3.
 You can connect to the database in two ways: the usual way and using the context manager.
 
 Usual way:
-```
+```python
 from lildb import DB
 
 db = DB("local.db")
@@ -16,7 +16,7 @@ db.close()
 ```
 
 Context manager:
-```
+```python
 from lildb import DB
 
 
@@ -29,7 +29,7 @@ with DB("local.db") as db:
 DB automatically collects information about existing tables, and allows you to present data in the form of dict or dataclass.
 
 By default db returns data as dict, you can change that with 'use_datacls' flag.
-```
+```python
 from lildb import DB
 
 # Dict rows
@@ -41,7 +41,7 @@ db = DB("local.db", use_datacls=True)
 
 ## About table
 If you are not using a custom table (more on this below), then DB will collect data about the tables automatically and you can use them using the DB attributes. For example, if there is a 'Person' table in the database, then you can work with it through the 'person' attribute.
-```
+```python
 db = DB("local.db")
 
 db.person
@@ -53,7 +53,7 @@ print(db.person)
 
 ## Create table
 Simple create table without column types:
-```
+```python
 db.create_table("Person", ("name", "post", "email", "salary", "img"))
 
 # Equivalent to 'CREATE TABLE IF NOT EXISTS Person(name, post, email, salary, img)'
@@ -62,7 +62,7 @@ db.create_table("Person", ("name", "post", "email", "salary", "img"))
 
 #### Advanced create table
 If you want use more features take this:
-```
+```python
 from lildb.column_types import Integer, Real, Text, Blob
 
 db.create_table(
@@ -95,7 +95,7 @@ db.create_table(
 ## Insert data
 
 Add new row:
-```
+```python
 db.person.insert({
     "name": "David",
     "email": "tst@email.com",
@@ -114,7 +114,7 @@ db.person.add({
 ```
 
 Add many rows:
-```
+```python
 persons = [
     {"name": "Ann", "email": "a@tst.com", "salary": 15, "post": "Manager"},
     {"name": "Jim", "email": "b@tst.com", "salary": 10, "post": "Security"},
@@ -130,7 +130,7 @@ db.person.add(persons)
 ## Select data
 
 Get all data from table:
-```
+```python
 db.person.all()
 
 # Equivalent to 'SELECT * FROM Person'
@@ -138,18 +138,18 @@ db.person.all()
 ```
 
 Get first three rows:
-```
+```python
 db.person.select(size=3)
 ```
 
 Iterate through the table:
-```
+```python
 for row in db.person:
     row
 ```
 
 Simple filter:
-```
+```python
 db.person.select(salary=10, post="DevOps")
 
 # Equivalent to 'SELECT * FROM Person WHERE salary = 10 AND post = "DevOps"'
@@ -160,7 +160,7 @@ db.person.select(id=1, post="DevOps", operator="OR")
 ```
 
 Get one row by id or position if id does not exist:
-```
+```python
 db.person[1]
 
 # or
@@ -169,7 +169,7 @@ db.person.get(name="Ann")
 ```
 
 Select specific columns:
-```
+```python
 db.person.select(columns=["name", "id"])
 
 # Equivalent to 'SELECT name, id FROM Person'
@@ -188,7 +188,7 @@ db.person.select(columns=["name"], condition="salary < 15 or name = 'Ann'")
 ## Update data
 
 Change one row"
-```
+```python
 row = db.person[1]
 
 # if use dict row
@@ -201,7 +201,7 @@ row.change()
 ```
 
 Update column value in all rows
-```
+```python
 db.person.update({"salary": 100})
 ```
 
@@ -211,7 +211,7 @@ db.person.update({"post": "Admin"}, id=1)
 ```
 
 Simple filter
-```
+```python
 db.person.update({"post": "Developer", "salary": 1}, id=1, name="David")
 
 db.person.update(
@@ -226,18 +226,18 @@ db.person.update(
 ## Delete data
 
 Delete one row
-```
+```python
 row = db.person[1]
 row.delete()
 ```
 
 Simple filter delete
-```
+```python
 db.person.delete(id=1, name="David")
 ```
 
 Delete all rows with salary = 1
-```
+```python
 db.person.delete(salary=1)
 
 db.person.delete(salary=10, name="Sam", operator="OR")
@@ -246,7 +246,7 @@ db.person.delete(salary=10, name="Sam", operator="OR")
 
 ## Custom rows, tables, db
 If you want to create a custom class of rows or tables, then you can do it as follows:
-```
+```python
 # We create custom row for table Post
 from lildb.rows import dataclass_table
 from lildb.rows import Table
@@ -327,7 +327,7 @@ print(db.post.all())
 dataclass_table (from lildb.rows import dataclass_table) works the same way as 'dataclass' (from dataclasses), the only difference is that 'dataclass_table' adds two arguments and a mixin to work correctly.
 
 If you don't want to use 'dataclass_table' then make your row-class as follows:
-```
+```python
 from dataclasses import dataclass
 from lildb import _RowDataClsMixin
 from lildb import Table
@@ -351,7 +351,7 @@ class CustomPostRow(_RowDataClsMixin):
 
 ### Custom Dict row
 If you want to use dict instead of dataclass, you can do it like this
-```
+```python
 from lildb import RowDict
 
 
