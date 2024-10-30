@@ -3,12 +3,11 @@ from __future__ import annotations
 
 from abc import ABC
 from abc import abstractmethod
+from dataclasses import _process_class
 from dataclasses import field
 from dataclasses import make_dataclass
-from sqlite3 import OperationalError
 from typing import TYPE_CHECKING
 from typing import Any
-from typing import NoReturn
 
 
 if TYPE_CHECKING:
@@ -28,6 +27,15 @@ class ABCRow(ABC):
 
     table: Table
     changed_columns: set
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize."""
+        self.table = kwargs.pop("table")
+        self.changed_columns = set()
+        if self.table is None:
+            msg = "missing 1 required named argument: 'table'"
+            raise TypeError(msg)
+        super().__init__(*args, **kwargs)
 
     @property
     @abstractmethod
@@ -87,23 +95,17 @@ class _RowDataClsMixin(ABCRow):
             return
         super().__setattr__(name, value)
 
+    def __repr__(self: Any) -> str:
+        """View string by obj."""
+        columns = ", ".join(
+            f"{atr_name}={getattr(self, atr_name)}"
+            for atr_name in self.table.column_names
+        )
+        return f"{self.__class__.__name__}({columns})"
+
 
 class RowDict(ABCRow, dict):
     """DB row like a dict."""
-
-    def __init__(
-        self,
-        table: Table,
-        changed_columns: set,
-        **kwargs: Any,
-    ) -> None:
-        """Initialize dict row."""
-        self.table = table
-        self.changed_columns = changed_columns
-        if self.table is None:
-            msg = "missing 1 required named argument: 'table'"
-            raise TypeError(msg)
-        super().__init__(**kwargs)
 
     @property
     def not_changed_column_values(self) -> dict[str, Any]:
@@ -138,43 +140,69 @@ def make_row_data_cls(table: Table) -> type:
         for atr in [*table.column_names, "table", "changed_columns"]
     ]
 
-    def repr(self: data_cls) -> str:
-        """View sting by object."""
-        columns = ", ".join(
-            f"{atr_name}={getattr(self, atr_name)}"
-            for atr_name in self.table.column_names
-            # if atr_name not in {"table", "changed_columns"}
-        )
-        return f"{self.__class__.__name__}({columns})"
-
-    data_cls = make_dataclass(
-        "RowDataClass",
-        attributes,
-        # slots=True,
-        repr=False,
-        namespace={"repr": repr},
-    )
-
-    data_cls.__repr__ = repr
-
-    return type(
+    return make_dataclass(
         f"Row{table.name.title()}DataClass",
-        (data_cls, _RowDataClsMixin),
-        {},
-        # {"__slots__": data_cls.__slots__},
+        attributes,
+        repr=False,
+        bases=(_RowDataClsMixin,),
     )
 
+    # data_cls.__repr__ = repr
 
-def create_result_row(cls: type[ABCRow]) -> type[ABCRow]:
+    # return type(
+    #     f"Row{table.name.title()}DataClass",
+    #     (data_cls, _RowDataClsMixin),
+    #     {},
+    #     # {"__slots__": data_cls.__slots__},
+    # )
+
+
+def create_result_row(columns_name: list[str]) -> type[ABCRow]:
     """Create result row cls."""
-    row_cls = type(
+    return make_dataclass(
         "ResultRow",
-        (cls,),
+        columns_name,
+    )
+
+
+def dataclass_table(  # noqa: PLR0913
+    cls: None | type = None,
+    /,
+    *,
+    init: bool = True,
+    repr: bool = True,  # noqa: A002
+    eq: bool = True,
+    order: bool = False,
+    unsafe_hash: bool = False,
+    frozen: bool = False,
+) -> type:
+    """Make custom row dataclass with mixin, repr
+    and arguments: 'table', 'changed_columns'.
+    """
+    cls.__annotations__["table"] = Any
+    cls.__annotations__["changed_columns"] = set
+    cls.table = field(default=None)
+    cls.changed_columns = field(default=None)
+
+    def wrap(cls: type) -> type:
+        return _process_class(cls, init, False, eq, order, unsafe_hash, frozen)
+
+    # See if we're being called as @dataclass or @dataclass().
+    if cls is None:
+        # We're called with parens.
+        return wrap
+
+    # We're called as @dataclass without parens.
+    cls = wrap(cls)
+
+    cls = type(
+        cls.__name__,
+        (cls, _RowDataClsMixin),
         {},
     )
-    msg = "ResultRow cannot be changed"
-    def operation_error(self: row_cls) -> NoReturn:
-        """Change delete/update row method."""
-        raise OperationalError(msg)
-    row_cls.delete = row_cls.change = operation_error
-    return row_cls
+
+    if repr is False:
+        cls.__repr__ = cls.__str__
+
+    return cls
+

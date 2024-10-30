@@ -85,26 +85,33 @@ class DB:
         stmt = "SELECT name FROM sqlite_master WHERE type='table';"
         result = self.execute(stmt, result=ResultFetch.fetchall)
 
-        custom_tables = getattr(self, "custom_tables", [])
+        custom_table_names = set()
 
-        for table in custom_tables:
-            if hasattr(self, table.name.lower()):
+        for attr in filter(
+            lambda i: not i.startswith("_"),
+            dir(self.__class__),
+        ):
+            custom_table = getattr(self, attr)
+            if not isinstance(custom_table, Table):
                 continue
-            table(self)
-            setattr(self, table.name.lower(), table)
-            self.table_names.add(table.name)
+            custom_table_names.add(custom_table.name.lower())
+            custom_table(self)
 
         for name in result:
-            if hasattr(self, name[0].lower()):
+            table_name = name[0].lower()
+            self.table_names.add(table_name)
+
+            if table_name in custom_table_names:
                 continue
+
             new_table = Table(name[0], use_datacls=self.use_datacls)
             new_table(self)
             setattr(
                 self,
-                name[0].lower(),
+                table_name,
                 new_table,
             )
-            self.table_names.add(name[0].lower())
+            self.table_names.add(table_name)
         if hasattr(self, "tables"):
             del self.tables
 
@@ -179,7 +186,7 @@ class DB:
         """Create context manager."""
         return self
 
-    def __exit__(self, **kwargs: Any) -> None:
+    def __exit__(self, *args, **kwargs: Any) -> None:
         """Close connection."""
         self.close()
 

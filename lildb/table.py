@@ -14,7 +14,6 @@ from .operations import Delete
 from .operations import Insert
 from .operations import Select
 from .operations import Update
-from .rows import ABCRow
 from .rows import RowDict
 from .rows import make_row_data_cls
 
@@ -35,23 +34,29 @@ class Table:
     """Component for work with table."""
 
     row_cls: type[ABCRow] = RowDict
+    name: str | None = None
 
     def __init__(
         self,
-        name: str,
+        name: str | None = None,
         *,
         use_datacls: bool = False,
     ) -> None:
         """Initialize."""
-        self.name = name
+        self.name = self.name or name
+        if self.name is None:
+            msg = "Table name do not be None."
+            raise ValueError(msg)
+
+        self.use_datacls = use_datacls
+
+        # Operations
         self.select = getattr(self, "select", Select)(self)
         self.insert = getattr(self, "insert", Insert)(self)
         self.delete = getattr(self, "delete", Delete)(self)
         self.update = getattr(self, "update", Update)(self)
 
-        self.use_datacls = use_datacls
-
-        # sugar
+        # Sugar
         self.add = self.insert
 
     @property
@@ -117,7 +122,7 @@ class Table:
         return result[0] if result else None
 
     def drop(self) -> None:
-        """Drope this table."""
+        """Drop this table."""
         self.db.execute(f"DROP TABLE IF EXISTS {self.name}")
 
     def __repr__(self) -> str:
@@ -127,5 +132,5 @@ class Table:
     def __call__(self, db: DB) -> None:
         """Prepare table obj."""
         self.db = db
-        if self.use_datacls:
+        if self.use_datacls and self.row_cls == RowDict:
             self.row_cls = make_row_data_cls(self)

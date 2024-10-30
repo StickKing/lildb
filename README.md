@@ -2,7 +2,33 @@
 LilDB provides a simplified wrapper for SQLite3.
 
 ## Connection.
-Data from tables can be presented by dict or dataclass. You can change that with 'use_datacls' flag.
+
+You can connect to the database in two ways: the usual way and using the context manager.
+
+Usual way:
+```
+from lildb import DB
+
+db = DB("local.db")
+
+# Disconnect
+db.close()
+```
+
+Context manager:
+```
+from lildb import DB
+
+
+with DB("local.db") as db:
+    # do anything
+    ...
+# Disconnect
+```
+
+DB automatically collects information about existing tables, and allows you to present data in the form of dict or dataclass.
+
+By default db returns data as dict, you can change that with 'use_datacls' flag.
 ```
 from lildb import DB
 
@@ -11,6 +37,17 @@ db = DB("local.db")
 
 # DataClass rows
 db = DB("local.db", use_datacls=True)
+```
+
+## About table
+If you are not using a custom table (more on this below), then DB will collect data about the tables automatically and you can use them using the DB attributes. For example, if there is a 'Person' table in the database, then you can work with it through the 'person' attribute.
+```
+db = DB("local.db")
+
+db.person
+print(db.person)
+# <Table: Person>
+
 ```
 
 
@@ -57,7 +94,7 @@ db.create_table(
 
 ## Insert data
 
-Add one row:
+Add new row:
 ```
 db.person.insert({
     "name": "David",
@@ -205,4 +242,123 @@ db.person.delete(salary=1)
 
 db.person.delete(salary=10, name="Sam", operator="OR")
 # Equivalent to 'DELETE FROM Person WHERE salary = 10 OR name = "Sam"'
+```
+
+## Custom rows, tables, db
+If you want to create a custom class of rows or tables, then you can do it as follows:
+```
+# We create custom row for table Post
+from lildb.rows import dataclass_table
+from lildb.rows import Table
+from lildb.rows import DB
+from lildb.column_types import Integer
+from lildb.column_types import Text
+
+
+@dataclass_table
+class CustomPostRow:
+    """Any custom data class row."""
+
+    id: int
+    name: str
+
+    def title_post(self) -> str:
+        """Any custom method."""
+        return self.name.title()
+
+
+class CustomPostTable(Table):
+    """Any custom table class."""
+
+    # Table name in DB
+    name = "post"
+
+    # Use custom data class row
+    row_cls = CustomPostRow
+
+
+class CustomDB(DB):
+    """Custom DB."""
+
+    post = CustomPostTable()
+
+
+# Work with custom obj
+db = CustomDB("post.db")
+
+# Create table
+db.create_table(
+    "Post",
+    {
+        "id": Integer(),
+        "name": Text(),
+    },
+    table_primary_key=("id", "name"),
+)
+
+
+print(db.post)
+# <CustomPostTable: Post>
+
+db.post.add({"id": 1, "name": "manager"})
+db.post.add({"id": 2, "name": "developer"})
+
+print(db.post.all())
+# [CustomPostRow(id=1, name=manager), CustomPostRow(id=2, name=developer)]
+
+
+row = db.post.get(id=1)
+print(row.title_post())
+# Manager
+
+row.name = "admin"
+row.change()
+
+print(row.title_post())
+# Admin
+
+row.delete()
+
+print(db.post.all())
+# [CustomPostRow(id=2, name=developer)]
+```
+
+### dataclass_table
+dataclass_table (from lildb.rows import dataclass_table) works the same way as 'dataclass' (from dataclasses), the only difference is that 'dataclass_table' adds two arguments and a mixin to work correctly.
+
+If you don't want to use 'dataclass_table' then make your row-class as follows:
+```
+from dataclasses import dataclass
+from lildb import _RowDataClsMixin
+from lildb import Table
+
+
+@dataclass
+class CustomPostRow(_RowDataClsMixin):
+    """Any custom data class row."""
+
+    id: int
+    name: str
+
+    # Required fields for row-cls
+    table: Table
+    changed_columns: set
+
+    def title_post(self) -> str:
+        """Any custom method."""
+        return self.name.title()
+```
+
+### Custom Dict row
+If you want to use dict instead of dataclass, you can do it like this
+```
+from lildb import RowDict
+
+
+class CustomPostRow(RowDict):
+    """Any custom data class row."""
+
+    def title_post(self) -> str:
+        """Any custom method."""
+        return self["name"].title()
 ```

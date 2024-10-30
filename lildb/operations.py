@@ -155,15 +155,16 @@ class Select(TableOperation):
     ) -> list[ABCRow]:
         """Create dict from data."""
         row_cls = self.table.row_cls
-        if not columns:
-            columns = self.table.column_names
-        else:
-            row_cls = create_result_row(row_cls)
+        if columns:
+            row_cls = create_result_row(columns)
+            return [
+                row_cls(**dict(zip(columns, item)))
+                for item in items
+            ]
         return [
             row_cls(
                 table=self.table,
-                changed_columns=set(),
-                **dict(zip(columns, item)),
+                **dict(zip(self.table.column_names, item)),
             )
             for item in items
         ]
