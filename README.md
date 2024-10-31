@@ -249,8 +249,8 @@ If you want to create a custom class of rows or tables, then you can do it as fo
 ```python
 # We create custom row for table Post
 from lildb.rows import dataclass_table
-from lildb.rows import Table
-from lildb.rows import DB
+from lildb import Table
+from lildb import DB
 from lildb.column_types import Integer
 from lildb.column_types import Text
 
@@ -361,4 +361,38 @@ class CustomPostRow(RowDict):
     def title_post(self) -> str:
         """Any custom method."""
         return self["name"].title()
+```
+
+### Custom select, insert, delete and update
+The corresponding class is responsible for each CRUD operation. You can create your own instances in the following way
+
+```python
+# operation classes
+from lildb import Select, Insert, Update, Delete
+
+class CustomSelect(Select):
+    """Custom select."""
+
+    def get_manager(self) -> list:
+        """Get all managers."""
+        return self(name="manager")
+
+
+class CustomPostTable(Table):
+    """Any custom table class."""
+
+    # Table name in DB
+    name = "post"
+
+    # Use custom data class row
+    row_cls = CustomPostRow
+
+    # Custom select
+    select = CustomSelect
+
+    # Custom other operation
+    # insert = CustomInsert
+    # update = CustomUpdate
+    # delete = CustomDelete
+
 ```

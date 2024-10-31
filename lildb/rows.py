@@ -28,15 +28,6 @@ class ABCRow(ABC):
     table: Table
     changed_columns: set
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initialize."""
-        self.table = kwargs.pop("table")
-        self.changed_columns = set()
-        if self.table is None:
-            msg = "missing 1 required named argument: 'table'"
-            raise TypeError(msg)
-        super().__init__(*args, **kwargs)
-
     @property
     @abstractmethod
     def not_changed_column_values(self) -> dict[str, Any]:
@@ -87,7 +78,11 @@ class _RowDataClsMixin(ABCRow):
         }
 
     def __setattr__(self, name: str, value: Any) -> None:
-        if hasattr(self, name) and self.changed_columns is not None:
+        if (
+            hasattr(self, name) and
+            hasattr(self, "changed_columns") and
+            name in self.table.column_names
+        ):
             old_value = getattr(self, name)
             super().__setattr__(name, value)
             if value != old_value:
@@ -106,6 +101,15 @@ class _RowDataClsMixin(ABCRow):
 
 class RowDict(ABCRow, dict):
     """DB row like a dict."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize."""
+        self.table = kwargs.pop("table")
+        self.changed_columns = set()
+        if self.table is None:
+            msg = "missing 1 required named argument: 'table'"
+            raise TypeError(msg)
+        super().__init__(*args, **kwargs)
 
     @property
     def not_changed_column_values(self) -> dict[str, Any]:
@@ -182,7 +186,7 @@ def dataclass_table(  # noqa: PLR0913
     cls.__annotations__["table"] = Any
     cls.__annotations__["changed_columns"] = set
     cls.table = field(default=None)
-    cls.changed_columns = field(default=None)
+    cls.changed_columns = field(default_factory=lambda: set())
 
     def wrap(cls: type) -> type:
         return _process_class(cls, init, False, eq, order, unsafe_hash, frozen)
