@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "LilDB"
-version = "0.1.0"
+version = "0.5.0"
 description = "LilDB provides a simplified wrapper for SQLite3."
 authors = ["Anton Panteleev <mainsample@yandex.ru>"]
 readme = "README.md"
@@ -14,3 +14,14 @@ python = "^3.8"
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+target-version = "py38"
+
+[tool.ruff.lint]
+ignore = ["ANN401", "I001", "PYI034"]
+
+unfixable = [
+    "F401",
+    "PLR5501",
+]

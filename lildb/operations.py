@@ -17,8 +17,9 @@ from .rows import create_result_row
 
 
 if TYPE_CHECKING:
+    from .column_types import TColumnType
     from .db import DB
-    from .rows import ABCRow
+    from .rows import TRow
     from .table import Table
 
     TOperator = Literal["AND", "and", "OR", "or", ","]
@@ -129,9 +130,9 @@ class Select(TableOperation):
         *,
         size: int = 0,
         columns: Iterable[str] | None = None,
-    ) -> list[ABCRow]:
+    ) -> list[TRow]:
         """Execute with size."""
-        result = None
+        # result = None
         if size:
             result = self.table.execute(
                 query,
@@ -152,7 +153,7 @@ class Select(TableOperation):
         items: Iterable[tuple[tuple[Any, ...]]],
         *,
         columns: Iterable[str] | None = None,
-    ) -> list[ABCRow]:
+    ) -> list[TRow]:
         """Create dict from data."""
         row_cls = self.table.row_cls
         if columns:
@@ -176,7 +177,7 @@ class Select(TableOperation):
         size: int = 0,
         operator: TOperator = "AND",
         columns: Iterable[str] | None = None,
-    ) -> list[ABCRow]:
+    ) -> list[TRow]:
         """Filter data by filters value where key is
         column name value is content.
         """
@@ -199,8 +200,8 @@ class Select(TableOperation):
         operator: TOperator = "AND",
         columns: Iterable[str] | None = None,
         condition: str | None = None,
-        **filter_by: TQueryData,
-    ) -> list[ABCRow]:
+        **filter_by: int | str | None,
+    ) -> list[TRow]:
         """Select-query for current table."""
         query = self.query(columns)
         if filter_by:
@@ -220,7 +221,7 @@ class Insert(TableOperation):
 
     def query(
         self,
-        data: TQueryData | Iterable[TQueryData],
+        data: Sequence[TQueryData],
     ) -> str:
         """Create insert sql-query."""
         query = ", ".join(
@@ -233,17 +234,17 @@ class Insert(TableOperation):
         )
         return f"INSERT INTO {self.table.name} ({colums_name}) VALUES({query})"
 
-    def _prepare_input_data(self, data: Iterable[TQueryData]) -> tuple:
-        """Validate dict and create tuple for insert."""
-        return tuple(
-            data.get(name)
-            for name in self.table.column_names
-            if name in data
-        )
+    # def _prepare_input_data(self, data: TQueryData) -> tuple:
+    #     """Validate dict and create tuple for insert."""
+    #     return tuple(
+    #         data.get(name)
+    #         for name in self.table.column_names
+    #         if name in data
+    #     )
 
     def __call__(
         self,
-        data: TQueryData | Iterable[TQueryData],
+        data: TQueryData | Sequence[TQueryData],
     ) -> None:
         """Insert-query for current table."""
         if not data:
@@ -272,7 +273,10 @@ class Delete(TableOperation):
             msg = "Value do not be empty."
             raise ValueError(msg)
         query_and = self._make_operator_query(filter_by, operator)
-        query = f"DELETE FROM {self.table.name} WHERE {query_and}"  # noqa: S608
+        query = "DELETE FROM {} WHERE {}".format(
+            self.table.name,
+            query_and
+        )
         self.table.execute(query, filter_by)
 
     def __call__(
@@ -280,15 +284,22 @@ class Delete(TableOperation):
         id: int | Iterable[int] | None = None,  # noqa: A002
         *,
         operator: TOperator = "AND",
-        **filter_by: TQueryData,
+        condition: str | None = None,
+        **filter_by: int | str | None,
     ) -> None:
         """Delete-query for current table."""
         if isinstance(id, Iterable):
-            ids = tuple((str(id_),) for id_ in id)
-            self.table.execute(self.query(), ids, many=True)
+            ids = tuple((id_,) for id_ in id)
+            self.table.execute(self.query(), ids, many=True)  # type: ignore
             return
         if id is not None:
             filter_by["id"] = id
+
+        if condition:
+            query = f"DELETE FROM {self.table.name} WHERE {condition}"
+            self.table.execute(query)  # type: ignore
+            return
+
         self._filter(filter_by, operator=operator)
 
 
@@ -304,6 +315,7 @@ class Update(TableOperation):
         self,
         data: TQueryData,
         operator: TOperator = "AND",
+        condition: str | None = None,
         **filter_by: Any,
     ) -> None:
         """Insert-query for current table."""
@@ -322,7 +334,11 @@ class Update(TableOperation):
         query = self.query + query_coma
         if filter_by:
             query = f"{query} WHERE {query_operator}"
-        self.table.execute(query, data)
+            self.table.execute(query, data)  # type: ignore
+            return
+        if condition:
+            query = f"{query} WHERE {condition}"
+        self.table.execute(query, data)  # type: ignore
 
 
 class CreateTable(Operation):
@@ -336,7 +352,7 @@ class CreateTable(Operation):
         self,
         *,
         if_not_exists: bool = True,
-    ) -> Literal["CREATE TABLE IF NOT EXISTS ", "CREATE TABLE "]:
+    ) -> str:
         """Return base SQL command."""
         query = "CREATE TABLE "
         if if_not_exists:
@@ -346,7 +362,7 @@ class CreateTable(Operation):
     def __call__(
         self,
         table_name: str,
-        columns: Sequence[str] | MutableMapping[str, str],
+        columns: Sequence[str] | MutableMapping[str, TColumnType],
         table_primary_key: Sequence[str] | None = None,
         *,
         if_not_exists: bool = True,

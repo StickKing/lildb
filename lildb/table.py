@@ -5,9 +5,8 @@ from functools import cached_property
 from typing import TYPE_CHECKING
 from typing import Any
 from typing import Callable
+from typing import Generic
 from typing import Iterator
-from typing import MutableMapping
-from typing import Sequence
 
 from .enumcls import ResultFetch
 from .operations import Delete
@@ -15,6 +14,7 @@ from .operations import Insert
 from .operations import Select
 from .operations import Update
 from .rows import RowDict
+from .rows import TRow
 from .rows import make_row_data_cls
 
 
@@ -22,7 +22,6 @@ if TYPE_CHECKING:
     import sqlite3
 
     from .db import DB
-    from .rows import ABCRow
 
 
 __all__ = (
@@ -30,10 +29,10 @@ __all__ = (
 )
 
 
-class Table:
+class Table(Generic[TRow]):
     """Component for work with table."""
 
-    row_cls: type[ABCRow] = RowDict
+    row_cls: type[TRow] = RowDict  # type: ignore
     name: str | None = None
 
     def __init__(
@@ -67,7 +66,7 @@ class Table:
     @property
     def execute(
         self,
-    ) -> Callable[[str, MutableMapping | Sequence, bool, ResultFetch], None]:
+    ) -> Callable[..., list[Any] | None]:
         """Shortcut for execute.
 
         Args:
@@ -88,7 +87,9 @@ class Table:
     @cached_property
     def column_names(self) -> tuple[str, ...]:
         """Fetch table column name."""
-        stmt = f"SELECT name FROM PRAGMA_TABLE_INFO('{self.name}');"  # noqa: S608
+        stmt = "SELECT name FROM PRAGMA_TABLE_INFO('{}');".format(
+            self.name,
+        )
         result = self.db.execute(stmt, result=ResultFetch.fetchall)
         return tuple(
             name[0].lower()
@@ -100,7 +101,7 @@ class Table:
         """Check exist id column."""
         return "id" in self.column_names
 
-    def all(self) -> list[ABCRow]:
+    def all(self) -> list[TRow]:
         """Get all rows from table."""
         return self.select()
 
@@ -108,7 +109,7 @@ class Table:
         """Iterate through the row list."""
         return self.select().__iter__()
 
-    def __getitem__(self, index: int | str) -> ABCRow | RowDict | None:
+    def __getitem__(self, index: int | str) -> TRow | None:
         """Get row item by id or index in list."""
         result = None
         if not self.id_exist:
@@ -116,14 +117,16 @@ class Table:
         result = self.select(id=index)
         return result[0] if result else None
 
-    def get(self, **filter_by: str | int) -> ABCRow | RowDict | None:
+    def get(self, **filter_by: str | int) -> TRow | None:
         """Get one row by filter."""
         result = self.select(size=1, **filter_by)
         return result[0] if result else None
 
-    def drop(self) -> None:
+    def drop(self, *, init_tables: bool = True) -> None:
         """Drop this table."""
         self.db.execute(f"DROP TABLE IF EXISTS {self.name}")
+        if init_tables:
+            self.db.initialize_tables()
 
     def __repr__(self) -> str:
         """Repr view."""

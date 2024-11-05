@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections import UserString
 from numbers import Number
+from typing import TypeVar
 
 
 __all__ = (
@@ -14,13 +15,17 @@ __all__ = (
 )
 
 
+TColumnType = TypeVar("TColumnType", bound="BaseType")
+TNumberType = TypeVar("TNumberType", bound="Number")
+
+
 class BaseType(UserString):
     """Base column type."""
 
     def __init__(
         self,
         str_type: str,
-        default: Number | str | bytes | None = None,
+        default: TNumberType | str | bytes | None = None,
         *,
         primary_key: bool = False,
         unique: bool = False,
@@ -97,7 +102,7 @@ class Integer(BaseType):
         self.data = super().__str__()
         if self.autoincrement:
             self.data = self.data.replace("PRIMARY KEY", "")
-            self.data =  " PRIMARY KEY AUTOINCREMENT"
+            self.data = " PRIMARY KEY AUTOINCREMENT"
         return self.data
 
 
@@ -106,7 +111,7 @@ class Real(BaseType):
 
     def __init__(
         self,
-        default: Number | None = None,
+        default: TNumberType | None = None,
         *,
         primary_key: bool = False,
         unique: bool = False,

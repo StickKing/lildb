@@ -244,6 +244,53 @@ db.person.delete(salary=10, name="Sam", operator="OR")
 # Equivalent to 'DELETE FROM Person WHERE salary = 10 OR name = "Sam"'
 ```
 
+## Multithreaded
+You can use multithreaded using ThreadDB, example:
+```python
+from lildb import ThreadDB
+from concurrent.futures import ThreadPoolExecutor, wait
+
+
+db = ThreadDB("local.db")
+
+db.create_table(
+    "Person",
+    {
+        "id": Integer(primary_key=True),
+        "name": Text(nullable=True),
+        "email": Text(unique=True),
+        "post": Text(default="Admin"),
+        "salary": Real(default=10000),
+        "img": Blob(nullable=True),
+    },
+)
+
+persons = [
+    {"name": "Sam", "email": "c@tst.com", "salary": 1.5, "post": "DevOps"},
+    {"name": "Ann", "email": "a@tst.com", "salary": 15, "post": "Manager"},
+    {"name": "Jim", "email": "b@tst.com", "salary": 10, "post": "Security"},
+    {"name": "David", "email": "d@tst.com", "salary": 16, "post": "Developer"},
+]
+
+with ThreadPoolExecutor(max_workers=10) as executor:
+    futures = [executor.submit(db.person.add, person) for person in persons]
+    wait(futures)
+
+# for close connection
+db.close()
+```
+
+### How it work
+#### Singleton
+The Singleton pattern restricts the instantiation of a class to just one object. When you create an instance of the ThreadDB class, it checks if an instance already exists for the specified database. If one does, it returns the existing instance; otherwise, it creates a new instance for the specified database. This design pattern is particularly useful for managing database connections, as it provides a centralized point of access.
+
+#### Thread Safety
+To ensure multi-thread safety and prevent potential deadlocks, lildb utilizes an execution pipe. Whenever CRUD methods (Create, Read, Update, Delete) or custom SQL queries are called, the execution requests are sent to this pipe instead of directly accessing the database.
+
+1) When a CRUD method or custom SQL query is invoked, lildb places the request in a queue that serves as the execution pipe.
+2) In a separate execution thread, the requests are processed one by one from the execution pipe.
+3) The separate thread reads the requests and executes them sequentially on the SQLite database.
+
 ## Custom rows, tables, db
 If you want to create a custom class of rows or tables, then you can do it as follows:
 ```python

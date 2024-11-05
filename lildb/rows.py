@@ -3,15 +3,21 @@ from __future__ import annotations
 
 from abc import ABC
 from abc import abstractmethod
-from dataclasses import _process_class
+from dataclasses import _process_class  # type: ignore
 from dataclasses import field
 from dataclasses import make_dataclass
 from typing import TYPE_CHECKING
 from typing import Any
+from typing import Callable
+from typing import Iterable
+from typing import TypeVar
 
 
 if TYPE_CHECKING:
     from .table import Table
+
+
+TRow = TypeVar("TRow", bound="ABCRow")
 
 
 __all__ = (
@@ -78,10 +84,11 @@ class _RowDataClsMixin(ABCRow):
         }
 
     def __setattr__(self, name: str, value: Any) -> None:
+        """Check changed attribute for updating and deleting row."""
         if (
-            hasattr(self, name) and
             hasattr(self, "changed_columns") and
-            name in self.table.column_names
+            self.changed_columns is not None and
+            self.table is not None
         ):
             old_value = getattr(self, name)
             super().__setattr__(name, value)
@@ -139,10 +146,13 @@ class RowDict(ABCRow, dict):
 
 def make_row_data_cls(table: Table) -> type:
     """Create data cls row for the transmitted table."""
-    attributes = [
+    attributes: list[tuple[str, Any, field]] = [
         (atr, Any, field(default=None))
-        for atr in [*table.column_names, "table", "changed_columns"]
+        for atr in [*table.column_names, "table"]
     ]
+    attributes.append(
+        ("changed_columns", set, field(default_factory=lambda: set()))
+    )
 
     return make_dataclass(
         f"Row{table.name.title()}DataClass",
@@ -161,7 +171,7 @@ def make_row_data_cls(table: Table) -> type:
     # )
 
 
-def create_result_row(columns_name: list[str]) -> type[ABCRow]:
+def create_result_row(columns_name: Iterable[str]) -> type[Any]:
     """Create result row cls."""
     return make_dataclass(
         "ResultRow",
@@ -179,14 +189,14 @@ def dataclass_table(  # noqa: PLR0913
     order: bool = False,
     unsafe_hash: bool = False,
     frozen: bool = False,
-) -> type:
+) -> type | Callable[[type], type]:
     """Make custom row dataclass with mixin, repr
     and arguments: 'table', 'changed_columns'.
     """
     cls.__annotations__["table"] = Any
     cls.__annotations__["changed_columns"] = set
-    cls.table = field(default=None)
-    cls.changed_columns = field(default_factory=lambda: set())
+    cls.table = field(default=None)  # type: ignore
+    cls.changed_columns = field(default_factory=lambda: set())  # type: ignore
 
     def wrap(cls: type) -> type:
         return _process_class(cls, init, False, eq, order, unsafe_hash, frozen)
@@ -209,4 +219,3 @@ def dataclass_table(  # noqa: PLR0913
         cls.__repr__ = cls.__str__
 
     return cls
-

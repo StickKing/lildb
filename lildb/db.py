@@ -130,7 +130,7 @@ class DB:
     def drop_tables(self) -> None:
         """Drop all db tables."""
         for table in self.tables:
-            table.drop()
+            table.drop(init_tables=False)
         self.initialize_tables()
 
     def execute(
