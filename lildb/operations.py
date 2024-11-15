@@ -17,8 +17,7 @@ from .rows import create_result_row
 
 
 if TYPE_CHECKING:
-    from .column_types import TColumnType
-    from .db import DB
+    from .column_types import ForeignKey
     from .rows import TRow
     from .table import Table
 
@@ -121,6 +120,8 @@ class Select(TableOperation):
                 ", ".join(columns),
                 self.table.name,
             )
+        # TODO (StickKing): add table columns
+        # 0000
         return f"SELECT * FROM {self.table.name}"  # noqa: S608
 
     def _execute(
@@ -342,28 +343,14 @@ class Update(TableOperation):
 
 
 class CreateTable(Operation):
-    """Create table object."""
-
-    def __init__(self, db: DB) -> None:
-        """Initialize."""
-        self.db = db
-
-    def query(
-        self,
-        *,
-        if_not_exists: bool = True,
-    ) -> str:
-        """Return base SQL command."""
-        query = "CREATE TABLE "
-        if if_not_exists:
-            query += "IF NOT EXISTS "
-        return query
+    """With foreign keys."""
 
     def __call__(
         self,
         table_name: str,
-        columns: Sequence[str] | MutableMapping[str, TColumnType],
+        columns: Sequence[str] | MutableMapping[str, Any],
         table_primary_key: Sequence[str] | None = None,
+        foreign_keys: Sequence[ForeignKey] | None = None,
         *,
         if_not_exists: bool = True,
     ) -> None:
@@ -383,7 +370,9 @@ class CreateTable(Operation):
             TypeError: Incorrect type for column item
 
         """
-        query = f"{self.query(if_not_exists=if_not_exists)}{table_name}"
+        # TODO (StickKing): refactoring
+        # 0000
+        query = f"{self.query(if_not_exists=if_not_exists)}`{table_name}`"
 
         if not isinstance(columns, (Sequence, MutableMapping)):
             msg = "Incorrect type for columns"
@@ -395,6 +384,13 @@ class CreateTable(Operation):
             primary_key = ", PRIMARY KEY(" + ",".join(
                 _ for _ in table_primary_key
             ) + ")"
+
+        if foreign_keys:
+            keys = ", ".join(
+                key()
+                for key in foreign_keys
+            )
+            primary_key += keys if primary_key else ", " + keys
 
         if (
             isinstance(columns, Sequence) and
@@ -414,9 +410,11 @@ class CreateTable(Operation):
             raise TypeError(msg)
 
         columns_query = ", ".join(
-            f"{key} {value}"
+            f"`{key}` {value}"
             for key, value in columns.items()
         )
+
         query = f"{query} ({columns_query}{primary_key})"
+
         self.db.execute(query)
         self.db.initialize_tables()

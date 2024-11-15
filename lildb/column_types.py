@@ -5,6 +5,9 @@ from collections import UserString
 from numbers import Number
 from typing import TypeVar
 
+from .enumcls import DeleteAction
+from .enumcls import UpdateAction
+
 
 __all__ = (
     "BaseType",
@@ -12,6 +15,7 @@ __all__ = (
     "Real",
     "Text",
     "Blob",
+    "ForeignKey",
 )
 
 
@@ -200,3 +204,36 @@ class Blob(BaseType):
             unique=unique,
             nullable=nullable,
         )
+
+
+class ForeignKey(UserString):
+    """Foreign key constraint."""
+
+    def __init__(
+        self,
+        column: str,
+        table: str,
+        reference_column: str,
+        on_delete: DeleteAction | None = None,
+        on_update: UpdateAction | None = None,
+    ) -> None:
+        """Initialize."""
+        self.column = column
+        self.table = table
+        self.reference_column = reference_column
+        self.on_delete = DeleteAction(on_delete) if on_delete else on_delete
+        self.on_update = DeleteAction(on_update) if on_update else on_update
+        super().__init__("FOREIGN KEY(`{}`) REFERENCES `{}`(`{}`)")
+
+    def __call__(self) -> str:
+        """Create command."""
+        stmt = self.data.format(
+            self.column,
+            self.table,
+            self.reference_column,
+        )
+        if self.on_delete:
+            stmt += f" ON DELETE {self.on_delete.value}"
+        if self.on_update:
+            stmt += f" ON UPDATE {self.on_update.value}"
+        return stmt
