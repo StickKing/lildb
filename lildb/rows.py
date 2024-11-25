@@ -173,9 +173,11 @@ def make_row_data_cls(table: Table) -> type:
 
 def create_result_row(columns_name: Iterable[str]) -> type[Any]:
     """Create result row cls."""
+    columns = list(columns_name)
+    columns.append("table")
     return make_dataclass(
         "ResultRow",
-        columns_name,
+        columns,
     )
 
 

@@ -78,7 +78,7 @@ class DB:
         self.table_names: set = set()
         self.initialize_tables()
 
-        self.create_table = CreateTable(self)
+        self.create_table = getattr(self, "create_table", CreateTable)(self)
 
     def initialize_tables(self) -> None:
         """Initialize all db tables."""
@@ -166,6 +166,9 @@ class DB:
         if command in {"insert", "delete", "update", "create", "drop"}:
             self.connect.commit()
 
+        if command in {"drop", "create"}:
+            self.initialize_tables()
+
         # Check result
         if result is None:
             return None
@@ -189,7 +192,6 @@ class DB:
     def __exit__(self, *args, **kwargs: Any) -> None:
         """Close connection."""
         self.close()
-
 
     if TYPE_CHECKING:
         def __getattr__(self, name: str) -> Table:

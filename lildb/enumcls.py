@@ -25,7 +25,7 @@ class UpdateAction(Enum):
     restrict = "restrict"
 
 
-class DeleteAction(UpdateAction):
+class DeleteAction(Enum):
     """On delete action for foreign key column."""
 
     set_default = "set default"

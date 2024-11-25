@@ -83,7 +83,6 @@ class Table(Generic[TRow]):
         """
         return self.db.execute
 
-
     @cached_property
     def column_names(self) -> tuple[str, ...]:
         """Fetch table column name."""
@@ -125,6 +124,8 @@ class Table(Generic[TRow]):
     def drop(self, *, init_tables: bool = True) -> None:
         """Drop this table."""
         self.db.execute(f"DROP TABLE IF EXISTS {self.name}")
+        # TODO(stickking): What ?!?! replace in db.execute
+        # 0000
         if init_tables:
             self.db.initialize_tables()
 

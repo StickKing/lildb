@@ -6,6 +6,7 @@ from abc import abstractmethod
 from functools import cached_property
 from typing import TYPE_CHECKING
 from typing import Any
+from typing import Generator
 from typing import Iterable
 from typing import Literal
 from typing import MutableMapping
@@ -13,11 +14,13 @@ from typing import Sequence
 
 from .column_types import BaseType
 from .enumcls import ResultFetch
+from .rows import ABCRow
 from .rows import create_result_row
 
 
 if TYPE_CHECKING:
     from .column_types import ForeignKey
+    from .db import DB
     from .rows import TRow
     from .table import Table
 
@@ -115,14 +118,19 @@ class Select(TableOperation):
 
     def query(self, columns: Iterable[str] | None = None) -> str:
         """Fetch base query."""
+        columns_str = self._generate_columns(columns)
+        return f"SELECT {columns_str} FROM {self.table.name}"  # noqa: S608
+
+    def _generate_columns(self, columns: Iterable[str] | None = None) -> str:
+        """Create column str."""
+        columns_names = self.table.column_names
+        table_name = self.table.name
         if columns:
-            return "SELECT {} FROM {}".format(  # noqa: S608
-                ", ".join(columns),
-                self.table.name,
-            )
-        # TODO (StickKing): add table columns
-        # 0000
-        return f"SELECT * FROM {self.table.name}"  # noqa: S608
+            columns_names = columns
+        return ", ".join(
+            f"`{table_name}`.{name}"
+            for name in columns_names
+        )
 
     def _execute(
         self,
@@ -131,6 +139,7 @@ class Select(TableOperation):
         *,
         size: int = 0,
         columns: Iterable[str] | None = None,
+        return_generator: bool = False,
     ) -> list[TRow]:
         """Execute with size."""
         # result = None
@@ -141,12 +150,14 @@ class Select(TableOperation):
                 size=size,
                 result=ResultFetch.fetchmany,
             )
-            return self._as_list_row(result, columns=columns)
-        result = self.table.execute(
-            query,
-            parameters,
-            result=ResultFetch.fetchall,
-        )
+        else:
+            result = self.table.execute(
+                query,
+                parameters,
+                result=ResultFetch.fetchall,
+            )
+        if return_generator:
+            self._as_generator_row(result, columns=columns)
         return self._as_list_row(result, columns=columns)
 
     def _as_list_row(
@@ -155,27 +166,42 @@ class Select(TableOperation):
         *,
         columns: Iterable[str] | None = None,
     ) -> list[TRow]:
-        """Create dict from data."""
+        """Create list rows."""
         row_cls = self.table.row_cls
+        columns_name = self.table.column_names
         if columns:
             row_cls = create_result_row(columns)
-            return [
-                row_cls(**dict(zip(columns, item)))
-                for item in items
-            ]
+            columns_name = columns
         return [
             row_cls(
                 table=self.table,
-                **dict(zip(self.table.column_names, item)),
+                **dict(zip(columns_name, item)),
             )
             for item in items
         ]
+
+    def _as_generator_row(
+        self,
+        items: Iterable[tuple[tuple[Any, ...]]],
+        *,
+        columns: Iterable[str] | None = None,
+    ) -> Generator[ABCRow, Any, None]:
+        """Create rows generator."""
+        row_cls = self.table.row_cls
+        columns_name = self.table.column_names
+        if columns:
+            row_cls = create_result_row(columns)
+            columns_name = columns
+        for item in items:
+            yield row_cls(
+                table=self.table,
+                **dict(zip(columns_name, item)),
+            )
 
     def _filter(
         self,
         filter_by: TQueryData,
         *,
-        size: int = 0,
         operator: TOperator = "AND",
         columns: Iterable[str] | None = None,
     ) -> list[TRow]:
@@ -186,13 +212,7 @@ class Select(TableOperation):
             filter_by,
             operator,
         )
-        query = f"{self.query(columns)} WHERE {operator_query}"
-        return self._execute(
-            query,
-            filter_by,
-            size=size,
-            columns=columns,
-        )
+        return f"{self.query(columns)} WHERE {operator_query}"
 
     def __call__(
         self,
@@ -201,20 +221,29 @@ class Select(TableOperation):
         operator: TOperator = "AND",
         columns: Iterable[str] | None = None,
         condition: str | None = None,
+        return_generator: bool = False,
         **filter_by: int | str | None,
     ) -> list[TRow]:
         """Select-query for current table."""
         query = self.query(columns)
         if filter_by:
-            return self._filter(
+            query = self._filter(
                 filter_by,
-                size=size,
                 operator=operator,
                 columns=columns,
             )
         if condition:
-            query = f"{query} WHERE {condition}"
-        return self._execute(query, {}, size=size, columns=columns)
+            query = "{} WHERE {}".format(
+                self.query(columns),
+                condition,
+            )
+        return self._execute(
+            query,
+            filter_by,
+            size=size,
+            columns=columns,
+            return_generator=return_generator,
+        )
 
 
 class Insert(TableOperation):
@@ -234,14 +263,6 @@ class Insert(TableOperation):
             for name in data[0]
         )
         return f"INSERT INTO {self.table.name} ({colums_name}) VALUES({query})"
-
-    # def _prepare_input_data(self, data: TQueryData) -> tuple:
-    #     """Validate dict and create tuple for insert."""
-    #     return tuple(
-    #         data.get(name)
-    #         for name in self.table.column_names
-    #         if name in data
-    #     )
 
     def __call__(
         self,
@@ -343,7 +364,78 @@ class Update(TableOperation):
 
 
 class CreateTable(Operation):
-    """With foreign keys."""
+    """Create table object."""
+
+    def __init__(self, db: DB) -> None:
+        """Initialize."""
+        self.db = db
+
+    def query(
+        self,
+        table_name: str,
+        columns: str,
+        table_primary_key: str,
+        foreign_keys: str,
+        *,
+        if_not_exists: bool = True,
+    ) -> str:
+        """Return SQL command."""
+        query = "CREATE TABLE "
+        if if_not_exists:
+            query += "IF NOT EXISTS "
+
+        if table_primary_key:
+            foreign_keys = ", " + foreign_keys
+
+        pr_fr_keys = table_primary_key + foreign_keys
+
+        return f"{query} `{table_name}` ({columns}{pr_fr_keys})"
+
+    def _genarate_table_primary_keys(
+        self,
+        table_primary_key: Sequence[str] | None = None,
+    ) -> str:
+        """Create table primary keys."""
+        if isinstance(table_primary_key, Sequence):
+            return ", PRIMARY KEY(" + ",".join(
+                _ for _ in table_primary_key
+            ) + ")"
+        return ""
+
+    def _genatate_table_foreign_keys(
+        self,
+        foreign_keys: Sequence[ForeignKey] | None = None,
+    ) -> str:
+        """Create table foreign keys."""
+        if foreign_keys and isinstance(foreign_keys, Sequence):
+            return ", ".join(
+                key()
+                for key in foreign_keys
+            )
+        return ""
+
+    def _generate_columns(
+        self,
+        columns: Sequence[str] | MutableMapping[str, Any],
+    ) -> str:
+        """Create column name with type if it exists."""
+        if (
+            isinstance(columns, Sequence) and
+            all(isinstance(_, str) for _ in columns)
+        ):
+            return ", ".join(columns)
+
+        if (
+            not isinstance(columns, MutableMapping) or
+            not all(isinstance(_, BaseType) for _ in columns.values())
+        ):
+            msg = "Incorrect type for column item"
+            raise TypeError(msg)
+
+        return ", ".join(
+            f"`{key}` {value}"
+            for key, value in columns.items()
+        )
 
     def __call__(
         self,
@@ -370,51 +462,25 @@ class CreateTable(Operation):
             TypeError: Incorrect type for column item
 
         """
-        # TODO (StickKing): refactoring
-        # 0000
-        query = f"{self.query(if_not_exists=if_not_exists)}`{table_name}`"
-
         if not isinstance(columns, (Sequence, MutableMapping)):
             msg = "Incorrect type for columns"
             raise TypeError(msg)
 
-        primary_key: str = ""
-
-        if isinstance(table_primary_key, Sequence):
-            primary_key = ", PRIMARY KEY(" + ",".join(
-                _ for _ in table_primary_key
-            ) + ")"
-
-        if foreign_keys:
-            keys = ", ".join(
-                key()
-                for key in foreign_keys
-            )
-            primary_key += keys if primary_key else ", " + keys
-
-        if (
-            isinstance(columns, Sequence) and
-            all(isinstance(_, str) for _ in columns)
-        ):
-            columns_query = ", ".join(columns)
-            query = f"{query}({columns_query}{primary_key})"
-            self.db.execute(query)
-            self.db.initialize_tables()
-            return
-
-        if (
-            not isinstance(columns, MutableMapping) or
-            not all(isinstance(_, BaseType) for _ in columns.values())
-        ):
-            msg = "Incorrect type for column item"
-            raise TypeError(msg)
-
-        columns_query = ", ".join(
-            f"`{key}` {value}"
-            for key, value in columns.items()
+        columns = self._generate_columns(
+            columns,
+        )
+        table_primary_keys = self._genarate_table_primary_keys(
+            table_primary_key,
+        )
+        foreign_keys = self._genatate_table_foreign_keys(
+            foreign_keys
         )
 
-        query = f"{query} ({columns_query}{primary_key})"
-
+        query = self.query(
+            table_name,
+            columns,
+            table_primary_keys,
+            foreign_keys,
+            if_not_exists=if_not_exists,
+        )
         self.db.execute(query)
-        self.db.initialize_tables()

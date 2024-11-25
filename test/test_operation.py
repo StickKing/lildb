@@ -96,15 +96,23 @@ class TestSelect:
         db_dict, db_cls = dbs
 
         column_names = {"name", "salary"}
+        # table attr in ResultRow too
+        column_names_with_table = {*column_names, "table"}
 
         for row1, row2 in zip(
             db_dict.ttable.select(columns=column_names),
             db_cls.ttable.select(columns=column_names),
         ):
-            assert len(row1.__dict__) == len(column_names)
-            assert all(name in column_names for name in row1.__dict__)
-            assert len(row2.__dict__) == len(column_names)
-            assert all(name in column_names for name in row2.__dict__)
+            assert len(row1.__dict__) == len(column_names_with_table)
+            assert all(
+                name in column_names_with_table
+                for name in row1.__dict__
+            )
+            assert len(row2.__dict__) == len(column_names_with_table)
+            assert all(
+                name in column_names_with_table
+                for name in row2.__dict__
+            )
 
     def test_condition(self, dbs: tuple[DB, ...]) -> None:
         """Test for geting one row."""
