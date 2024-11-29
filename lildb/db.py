@@ -158,6 +158,7 @@ class DB:
         """
         command = query.partition(" ")[0].lower()
         cursor = self.connect.cursor()
+        logging.info(query)
         if many:
             cursor.executemany(query, parameters)
         else:

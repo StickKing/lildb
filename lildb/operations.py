@@ -384,8 +384,8 @@ class CreateTable(Operation):
         if if_not_exists:
             query += "IF NOT EXISTS "
 
-        if table_primary_key and foreign_keys:
-            foreign_keys = ", " + foreign_keys
+        # if table_primary_key and foreign_keys:
+        #     foreign_keys = ", " + foreign_keys
 
         pr_fr_keys = table_primary_key + foreign_keys
 
@@ -408,7 +408,7 @@ class CreateTable(Operation):
     ) -> str:
         """Create table foreign keys."""
         if foreign_keys and isinstance(foreign_keys, Sequence):
-            return ", ".join(
+            return ", " + ", ".join(
                 key()
                 for key in foreign_keys
             )

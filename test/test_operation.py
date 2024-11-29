@@ -3,10 +3,14 @@ from __future__ import annotations
 
 import uuid
 from random import randint
+from typing import Any
+from typing import MutableMapping
+from typing import Sequence
 
 import pytest
 
 from lildb import DB
+from lildb.column_types import ForeignKey
 
 
 @pytest.fixture(scope="package")
@@ -18,6 +22,156 @@ def dbs() -> tuple[DB, ...]:
     db_dict.create_table("ttable", ["id", "name", "post", "salary"])
     db_cls = DB("test.db", use_datacls=True)
     return (db_dict, db_cls)
+
+
+class TestCreateTable:
+    """Test Create table operations."""
+
+    def prepare_query(
+        self,
+        db: DB,
+        table_name: str,
+        columns: Sequence[str] | MutableMapping[str, Any],
+        table_primary_key: Sequence[str] | None = None,
+        foreign_keys: Sequence[ForeignKey] | None = None,
+        *,
+        if_not_exists: bool = True,
+    ) -> str:
+        columns = db.create_table._generate_columns(
+            columns,
+        )
+        table_primary_keys = db.create_table._genarate_table_primary_keys(
+            table_primary_key,
+        )
+        foreign_keys = db.create_table._genatate_table_foreign_keys(
+            foreign_keys
+        )
+        query = db.create_table.query(
+            table_name,
+            columns,
+            table_primary_keys,
+            foreign_keys,
+            if_not_exists=if_not_exists,
+        )
+        return query.replace("  ", " ")
+
+    def test_simple(self, dbs: tuple[DB, ...]) -> None:
+        """
+        Simple creating table test without types,
+        table primary keys and foreign keys.
+        """
+        db, _ = dbs
+        query = self.prepare_query(db, "Person", ["name"])
+        assert query == "CREATE TABLE IF NOT EXISTS `Person` (name)"
+
+        query = self.prepare_query(db, "Person", ["name", "post"])
+        assert query == "CREATE TABLE IF NOT EXISTS `Person` (name, post)"
+
+        query = self.prepare_query(db, "Person", ["name", "post", "salary"])
+        assert (
+            query == "CREATE TABLE IF NOT EXISTS `Person` (name, post, salary)"
+        )
+
+    def test_simple_primary(self, dbs: tuple[DB, ...]) -> None:
+        """
+        Simple creating table test without types,
+        foreign keys but with table primary keys.
+        """
+        db, _ = dbs
+        query = self.prepare_query(
+            db,
+            "Person",
+            ["name"],
+            table_primary_key=("name",),
+        )
+        assert query == (
+            "CREATE TABLE IF NOT EXISTS `Person` "
+            "(name, PRIMARY KEY(name))"
+        )
+
+        query = self.prepare_query(
+            db,
+            "Person",
+            ["id", "name"],
+            table_primary_key=("name",),
+        )
+        assert query == (
+            "CREATE TABLE IF NOT EXISTS `Person` "
+            "(id, name, PRIMARY KEY(name))"
+        )
+
+        query = self.prepare_query(
+            db,
+            "Person",
+            ["id", "name"],
+            table_primary_key=("name", "id"),
+        )
+        assert query == (
+            "CREATE TABLE IF NOT EXISTS `Person` "
+            "(id, name, PRIMARY KEY(name,id))"
+        )
+
+    def test_simple_foreign(self, dbs: tuple[DB, ...]) -> None:
+        """
+        Simple creating table test without types,
+        foreign keys, table primary keys but with foreign keys.
+        """
+        db, _ = dbs
+        query = self.prepare_query(
+            db,
+            "Person",
+            ["name"],
+            foreign_keys=(ForeignKey("name", "Person", "name"),),
+        )
+        assert query == (
+            "CREATE TABLE IF NOT EXISTS `Person` "
+            "(name, FOREIGN KEY(`name`) REFERENCES `Person`(`name`))"
+        )
+
+        query = self.prepare_query(
+            db,
+            "Person",
+            ["name", "id"],
+            foreign_keys=(ForeignKey("name", "Person", "name"),),
+        )
+        assert query == (
+            "CREATE TABLE IF NOT EXISTS `Person` "
+            "(name, id, FOREIGN KEY(`name`) REFERENCES `Person`(`name`))"
+        )
+
+        query = self.prepare_query(
+            db,
+            "Person",
+            ["post_id", "name", "id", "any_id"],
+            foreign_keys=(
+                ForeignKey("any_id", "AnyTable", "id"),
+                ForeignKey("post_id", "Post", "id"),
+            ),
+        )
+        assert query == (
+            "CREATE TABLE IF NOT EXISTS `Person` "
+            "(post_id, name, id, any_id, FOREIGN KEY(`any_id`) "
+            "REFERENCES `AnyTable`(`id`), FOREIGN KEY(`post_id`) "
+            "REFERENCES `Post`(`id`))"
+        )
+
+    def test_simple_full(self, dbs: tuple[DB, ...]) -> None:
+        """
+        Simple creating table test with foreign keys, table primary keys.
+        """
+        db, _ = dbs
+        query = self.prepare_query(
+            db,
+            "Person",
+            ["name", "any_id"],
+            foreign_keys=(ForeignKey("any_id", "Any", "id"),),
+            table_primary_key=("name",),
+        )
+        assert query == (
+            "CREATE TABLE IF NOT EXISTS `Person` "
+            "(name, any_id, PRIMARY KEY(name), FOREIGN KEY(`any_id`) "
+            "REFERENCES `Any`(`id`))"
+        )
 
 
 class TestInsert:
