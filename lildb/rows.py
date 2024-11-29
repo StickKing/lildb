@@ -1,6 +1,7 @@
 """Module contains row classes."""
 from __future__ import annotations
 
+import sys
 from abc import ABC
 from abc import abstractmethod
 from dataclasses import _process_class  # type: ignore
@@ -181,27 +182,57 @@ def create_result_row(columns_name: Iterable[str]) -> type[Any]:
     )
 
 
-def dataclass_table(  # noqa: PLR0913
+def dataclass_row(  # noqa: PLR0913
     cls: None | type = None,
     /,
     *,
     init: bool = True,
-    repr: bool = True,  # noqa: A002
+    repr: bool = True,
     eq: bool = True,
     order: bool = False,
     unsafe_hash: bool = False,
     frozen: bool = False,
+    **kwargs: Any,
 ) -> type | Callable[[type], type]:
     """Make custom row dataclass with mixin, repr
     and arguments: 'table', 'changed_columns'.
     """
-    cls.__annotations__["table"] = Any
-    cls.__annotations__["changed_columns"] = set
-    cls.table = field(default=None)  # type: ignore
-    cls.changed_columns = field(default_factory=lambda: set())  # type: ignore
+    python_version = sys.version_info
+
+    if python_version.major == 3 and python_version.minor >= 10:
+        kwargs["match_args"] = kwargs.get("match_args", True)
+        kwargs["kw_only"] = kwargs.get("kw_only", False)
+        kwargs["slots"] = kwargs.get("slots", False)
+
+    if python_version.major == 3 and python_version.minor >= 11:
+        kwargs["weakref_slot"] = kwargs.get("weakref_slot", False)
 
     def wrap(cls: type) -> type:
-        return _process_class(cls, init, False, eq, order, unsafe_hash, frozen)
+        cls.__annotations__["table"] = Any
+        cls.__annotations__["changed_columns"] = set
+        cls.table = field(default=None)  # type: ignore
+        cls.changed_columns = field(default_factory=lambda: set())
+
+        # TODO (stickking): Remove _process_class and take wrap
+        # 0000
+        new_cls = _process_class(
+            cls,
+            init,
+            repr,
+            eq,
+            order,
+            unsafe_hash,
+            frozen,
+            **kwargs,
+        )
+        # TODO (stickking): Why dict if slots?!?!
+        # 0000
+        return type(
+            new_cls.__name__,
+            (cls, _RowDataClsMixin),
+            {} if hasattr(cls, "__dict__")
+            else {"__slots__": new_cls.__slots__},
+        )
 
     # See if we're being called as @dataclass or @dataclass().
     if cls is None:
@@ -210,12 +241,6 @@ def dataclass_table(  # noqa: PLR0913
 
     # We're called as @dataclass without parens.
     cls = wrap(cls)
-
-    cls = type(
-        cls.__name__,
-        (cls, _RowDataClsMixin),
-        {},
-    )
 
     if repr is False:
         cls.__repr__ = cls.__str__

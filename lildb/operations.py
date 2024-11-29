@@ -384,7 +384,7 @@ class CreateTable(Operation):
         if if_not_exists:
             query += "IF NOT EXISTS "
 
-        if table_primary_key:
+        if table_primary_key and foreign_keys:
             foreign_keys = ", " + foreign_keys
 
         pr_fr_keys = table_primary_key + foreign_keys

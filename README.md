@@ -295,14 +295,14 @@ To ensure multi-thread safety and prevent potential deadlocks, lildb utilizes an
 If you want to create a custom class of rows or tables, then you can do it as follows:
 ```python
 # We create custom row for table Post
-from lildb.rows import dataclass_table
+from lildb.rows import dataclass_row
 from lildb import Table
 from lildb import DB
 from lildb.column_types import Integer
 from lildb.column_types import Text
 
 
-@dataclass_table
+@dataclass_row
 class CustomPostRow:
     """Any custom data class row."""
 
@@ -370,10 +370,10 @@ print(db.post.all())
 # [CustomPostRow(id=2, name=developer)]
 ```
 
-### dataclass_table
-dataclass_table (from lildb.rows import dataclass_table) works the same way as 'dataclass' (from dataclasses), the only difference is that 'dataclass_table' adds two arguments and a mixin to work correctly.
+### dataclass_row
+dataclass_row (from lildb.rows import dataclass_row) works the same way as 'dataclass' (from dataclasses), the only difference is that 'dataclass_row' adds two arguments and a mixin to work correctly.
 
-If you don't want to use 'dataclass_table' then make your row-class as follows:
+If you don't want to use 'dataclass_row' then make your row-class as follows:
 ```python
 from dataclasses import dataclass
 from lildb import _RowDataClsMixin
