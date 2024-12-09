@@ -105,8 +105,10 @@ class Integer(BaseType):
         """Create string column type."""
         self.data = super().__str__()
         if self.autoincrement:
-            self.data = self.data.replace("PRIMARY KEY", "")
-            self.data = " PRIMARY KEY AUTOINCREMENT"
+            self.data = self.data.replace(
+                "PRIMARY KEY",
+                "PRIMARY KEY AUTOINCREMENT",
+            )
         return self.data
 
 

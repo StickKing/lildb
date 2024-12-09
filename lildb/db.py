@@ -82,7 +82,10 @@ class DB:
 
     def initialize_tables(self) -> None:
         """Initialize all db tables."""
-        stmt = "SELECT name FROM sqlite_master WHERE type='table';"
+        stmt = (
+            "SELECT name FROM sqlite_master "
+            "WHERE type='table' AND substr(`name`, 1, 6) != 'sqlite';"
+        )
         result = self.execute(stmt, result=ResultFetch.fetchall)
 
         custom_table_names = set()

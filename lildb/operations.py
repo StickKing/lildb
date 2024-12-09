@@ -88,6 +88,7 @@ class TableOperation(Operation, ABC):
         operator: TOperator = "AND",
         *,
         without_parameters: bool = False,
+        is_null: bool = True,
     ) -> str:
         if operator.lower() not in {"and", "or", ","}:
             msg = "Incorrect operator."
@@ -95,13 +96,17 @@ class TableOperation(Operation, ABC):
 
         if not without_parameters:
             return f" {operator} ".join(
-                f"{key} is NULL" if value is None else f"{key} = :{key}"
+                f"{key} is NULL" if (
+                    value is None and is_null
+                ) else f"{key} = :{key}"
                 for key, value in data.items()
             )
 
         return f" {operator} ".join(
             f"{key} is NULL"
-            if value is None else
+            if (
+                value is None and is_null
+            ) else
             f"{key} = '{value}'"
             if isinstance(value, str)
             else f"{key} = {value}"
@@ -347,15 +352,19 @@ class Update(TableOperation):
         if not data:
             msg = "Argument 'data' do not be empty."
             raise ValueError(msg)
-        query_coma = self._make_operator_query(data, operator=",")
-        query_operator = self._make_operator_query(
+        new_column_values = self._make_operator_query(
+            data,
+            operator=",",
+            is_null=False,
+        )
+        filter_value = self._make_operator_query(
             filter_by,
             operator,
             without_parameters=True,
         )
-        query = self.query + query_coma
+        query = self.query + new_column_values
         if filter_by:
-            query = f"{query} WHERE {query_operator}"
+            query = f"{query} WHERE {filter_value}"
             self.table.execute(query, data)  # type: ignore
             return
         if condition:

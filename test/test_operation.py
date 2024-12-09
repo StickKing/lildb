@@ -10,7 +10,11 @@ from typing import Sequence
 import pytest
 
 from lildb import DB
+from lildb.column_types import Blob
 from lildb.column_types import ForeignKey
+from lildb.column_types import Integer
+from lildb.column_types import Real
+from lildb.column_types import Text
 
 
 @pytest.fixture(scope="package")
@@ -173,6 +177,444 @@ class TestCreateTable:
             "REFERENCES `Any`(`id`))"
         )
 
+    def test_with_types(self, dbs: tuple[DB, ...]) -> None:
+        """Create table with column types."""
+        db, _ = dbs
+        query = self.prepare_query(
+            db,
+            "Person",
+            {
+                "id": Integer(),
+                "name": Text(),
+                "salary": Real(),
+                "img": Blob(),
+            }
+        )
+        assert query == (
+            "CREATE TABLE IF NOT EXISTS `Person` ("
+            "`id` INTEGER NOT NULL , "
+            "`name` TEXT NOT NULL , "
+            "`salary` REAL NOT NULL , "
+            "`img` BLOB NOT NULL )"
+        )
+
+        query = self.prepare_query(
+            db,
+            "Person",
+            {
+                "id": Integer(default=10),
+                "name": Text(default='David'),
+                "salary": Real(default=150.5),
+                "img": Blob(),
+            }
+        )
+        assert query == (
+            "CREATE TABLE IF NOT EXISTS `Person` ("
+            "`id` INTEGER DEFAULT 10 NOT NULL , "
+            "`name` TEXT DEFAULT 'David' NOT NULL , "
+            "`salary` REAL DEFAULT 150.5 NOT NULL , "
+            "`img` BLOB NOT NULL )"
+        )
+
+        query = self.prepare_query(
+            db,
+            "Person",
+            {
+                "id": Integer(unique=True),
+                "name": Text(unique=True),
+                "salary": Real(unique=True),
+                "img": Blob(unique=True),
+            }
+        )
+        assert query == (
+            "CREATE TABLE IF NOT EXISTS `Person` ("
+            "`id` INTEGER NOT NULL UNIQUE , "
+            "`name` TEXT NOT NULL UNIQUE , "
+            "`salary` REAL NOT NULL UNIQUE , "
+            "`img` BLOB NOT NULL UNIQUE )"
+        )
+
+        query = self.prepare_query(
+            db,
+            "Person",
+            {
+                "id": Integer(nullable=True),
+                "name": Text(nullable=True),
+                "salary": Real(nullable=True),
+                "img": Blob(nullable=True),
+            }
+        )
+        assert query == (
+            "CREATE TABLE IF NOT EXISTS `Person` ("
+            "`id` INTEGER, "
+            "`name` TEXT, "
+            "`salary` REAL, "
+            "`img` BLOB)"
+        )
+
+        query = self.prepare_query(
+            db,
+            "Person",
+            {
+                "id": Integer(primary_key=True, autoincrement=True),
+                "name": Text(nullable=True, unique=True, default='David'),
+                "salary": Real(nullable=True, unique=True, default=100.5),
+                "img": Blob(nullable=True, unique=True),
+            }
+        )
+        assert query == (
+            "CREATE TABLE IF NOT EXISTS `Person` ("
+            "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL , "
+            "`name` TEXT DEFAULT 'David' UNIQUE , "
+            "`salary` REAL DEFAULT 100.5 UNIQUE , "
+            "`img` BLOB UNIQUE )"
+        )
+
+    def test_with_types_primary(self, dbs: tuple[DB, ...]) -> None:
+        """Create table with column types and table primary key."""
+        db, _ = dbs
+        query = self.prepare_query(
+            db,
+            "Person",
+            {
+                "id": Integer(),
+                "name": Text(),
+                "salary": Real(),
+                "img": Blob(),
+            },
+            table_primary_key=("id",),
+        )
+        assert query == (
+            "CREATE TABLE IF NOT EXISTS `Person` ("
+            "`id` INTEGER NOT NULL , "
+            "`name` TEXT NOT NULL , "
+            "`salary` REAL NOT NULL , "
+            "`img` BLOB NOT NULL , "
+            "PRIMARY KEY(id))"
+        )
+
+        query = self.prepare_query(
+            db,
+            "Person",
+            {
+                "id": Integer(default=10),
+                "name": Text(default='David'),
+                "salary": Real(default=150.5),
+                "img": Blob(),
+            },
+            table_primary_key=("id",),
+        )
+        assert query == (
+            "CREATE TABLE IF NOT EXISTS `Person` ("
+            "`id` INTEGER DEFAULT 10 NOT NULL , "
+            "`name` TEXT DEFAULT 'David' NOT NULL , "
+            "`salary` REAL DEFAULT 150.5 NOT NULL , "
+            "`img` BLOB NOT NULL , "
+            "PRIMARY KEY(id))"
+        )
+
+        query = self.prepare_query(
+            db,
+            "Person",
+            {
+                "id": Integer(unique=True),
+                "name": Text(unique=True),
+                "salary": Real(unique=True),
+                "img": Blob(unique=True),
+            },
+            table_primary_key=("id", "name"),
+        )
+        assert query == (
+            "CREATE TABLE IF NOT EXISTS `Person` ("
+            "`id` INTEGER NOT NULL UNIQUE , "
+            "`name` TEXT NOT NULL UNIQUE , "
+            "`salary` REAL NOT NULL UNIQUE , "
+            "`img` BLOB NOT NULL UNIQUE , "
+            "PRIMARY KEY(id,name))"
+        )
+
+        query = self.prepare_query(
+            db,
+            "Person",
+            {
+                "id": Integer(nullable=True),
+                "name": Text(nullable=True),
+                "salary": Real(nullable=True),
+                "img": Blob(nullable=True),
+            },
+            table_primary_key=("id", "name"),
+        )
+        assert query == (
+            "CREATE TABLE IF NOT EXISTS `Person` ("
+            "`id` INTEGER, "
+            "`name` TEXT, "
+            "`salary` REAL, "
+            "`img` BLOB, "
+            "PRIMARY KEY(id,name))"
+        )
+
+        query = self.prepare_query(
+            db,
+            "Person",
+            {
+                "id": Integer(),
+                "name": Text(nullable=True, unique=True, default='David'),
+                "salary": Real(nullable=True, unique=True, default=100.5),
+                "img": Blob(nullable=True, unique=True),
+            },
+            table_primary_key=("id", "name", "salary"),
+        )
+        assert query == (
+            "CREATE TABLE IF NOT EXISTS `Person` ("
+            "`id` INTEGER NOT NULL , "
+            "`name` TEXT DEFAULT 'David' UNIQUE , "
+            "`salary` REAL DEFAULT 100.5 UNIQUE , "
+            "`img` BLOB UNIQUE , "
+            "PRIMARY KEY(id,name,salary))"
+        )
+
+    def test_with_types_foreign(self, dbs: tuple[DB, ...]) -> None:
+        """Create table with column types and table primary key."""
+        db, _ = dbs
+        query = self.prepare_query(
+            db,
+            "Person",
+            {
+                "id": Integer(),
+                "name": Text(),
+                "salary": Real(),
+                "img": Blob(),
+                "any_id": Integer(),
+            },
+            foreign_keys=(ForeignKey("any_id", "Any", "id"),),
+        )
+        assert query == (
+            "CREATE TABLE IF NOT EXISTS `Person` ("
+            "`id` INTEGER NOT NULL , "
+            "`name` TEXT NOT NULL , "
+            "`salary` REAL NOT NULL , "
+            "`img` BLOB NOT NULL , "
+            "`any_id` INTEGER NOT NULL , "
+            "FOREIGN KEY(`any_id`) REFERENCES `Any`(`id`))"
+        )
+
+        query = self.prepare_query(
+            db,
+            "Person",
+            {
+                "id": Integer(default=10),
+                "name": Text(default='David'),
+                "salary": Real(default=150.5),
+                "img": Blob(),
+                "any_id": Integer(),
+            },
+            foreign_keys=(ForeignKey("any_id", "Any", "id"),),
+        )
+        assert query == (
+            "CREATE TABLE IF NOT EXISTS `Person` ("
+            "`id` INTEGER DEFAULT 10 NOT NULL , "
+            "`name` TEXT DEFAULT 'David' NOT NULL , "
+            "`salary` REAL DEFAULT 150.5 NOT NULL , "
+            "`img` BLOB NOT NULL , "
+            "`any_id` INTEGER NOT NULL , "
+            "FOREIGN KEY(`any_id`) REFERENCES `Any`(`id`))"
+        )
+
+        query = self.prepare_query(
+            db,
+            "Person",
+            {
+                "id": Integer(unique=True),
+                "name": Text(unique=True),
+                "salary": Real(unique=True),
+                "img": Blob(unique=True),
+                "any_id": Integer(),
+            },
+            foreign_keys=(ForeignKey("any_id", "Any", "id"),),
+        )
+        assert query == (
+            "CREATE TABLE IF NOT EXISTS `Person` ("
+            "`id` INTEGER NOT NULL UNIQUE , "
+            "`name` TEXT NOT NULL UNIQUE , "
+            "`salary` REAL NOT NULL UNIQUE , "
+            "`img` BLOB NOT NULL UNIQUE , "
+            "`any_id` INTEGER NOT NULL , "
+            "FOREIGN KEY(`any_id`) REFERENCES `Any`(`id`))"
+        )
+
+        query = self.prepare_query(
+            db,
+            "Person",
+            {
+                "id": Integer(nullable=True),
+                "name": Text(nullable=True),
+                "salary": Real(nullable=True),
+                "img": Blob(nullable=True),
+                "any_id": Integer(),
+            },
+            foreign_keys=(ForeignKey("any_id", "Any", "id"),),
+        )
+        assert query == (
+            "CREATE TABLE IF NOT EXISTS `Person` ("
+            "`id` INTEGER, "
+            "`name` TEXT, "
+            "`salary` REAL, "
+            "`img` BLOB, "
+            "`any_id` INTEGER NOT NULL , "
+            "FOREIGN KEY(`any_id`) REFERENCES `Any`(`id`))"
+        )
+
+        query = self.prepare_query(
+            db,
+            "Person",
+            {
+                "id": Integer(primary_key=True, autoincrement=True),
+                "name": Text(nullable=True, unique=True, default='David'),
+                "salary": Real(nullable=True, unique=True, default=100.5),
+                "img": Blob(nullable=True, unique=True),
+                "any_id": Integer(),
+            },
+            foreign_keys=(ForeignKey("any_id", "Any", "id"),),
+        )
+        assert query == (
+            "CREATE TABLE IF NOT EXISTS `Person` ("
+            "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL , "
+            "`name` TEXT DEFAULT 'David' UNIQUE , "
+            "`salary` REAL DEFAULT 100.5 UNIQUE , "
+            "`img` BLOB UNIQUE , "
+            "`any_id` INTEGER NOT NULL , "
+            "FOREIGN KEY(`any_id`) REFERENCES `Any`(`id`))"
+        )
+
+    def test_with_types_full(self, dbs: tuple[DB, ...]) -> None:
+        """Create table with column types table primary key and foreign key."""
+        db, _ = dbs
+        query = self.prepare_query(
+            db,
+            "Person",
+            {
+                "id": Integer(),
+                "name": Text(),
+                "salary": Real(),
+                "img": Blob(),
+                "any_id": Integer(),
+            },
+            table_primary_key=("id",),
+            foreign_keys=(ForeignKey("any_id", "Any", "id"),),
+        )
+        assert query == (
+            "CREATE TABLE IF NOT EXISTS `Person` ("
+            "`id` INTEGER NOT NULL , "
+            "`name` TEXT NOT NULL , "
+            "`salary` REAL NOT NULL , "
+            "`img` BLOB NOT NULL , "
+            "`any_id` INTEGER NOT NULL , "
+            "PRIMARY KEY(id), "
+            "FOREIGN KEY(`any_id`) REFERENCES `Any`(`id`))"
+        )
+
+        query = self.prepare_query(
+            db,
+            "Person",
+            {
+                "id": Integer(default=10),
+                "name": Text(default='David'),
+                "salary": Real(default=150.5),
+                "img": Blob(),
+                "any_id": Integer(),
+            },
+            table_primary_key=("id",),
+            foreign_keys=(ForeignKey("any_id", "Any", "id"),),
+        )
+        assert query == (
+            "CREATE TABLE IF NOT EXISTS `Person` ("
+            "`id` INTEGER DEFAULT 10 NOT NULL , "
+            "`name` TEXT DEFAULT 'David' NOT NULL , "
+            "`salary` REAL DEFAULT 150.5 NOT NULL , "
+            "`img` BLOB NOT NULL , "
+            "`any_id` INTEGER NOT NULL , "
+            "PRIMARY KEY(id), "
+            "FOREIGN KEY(`any_id`) REFERENCES `Any`(`id`))"
+        )
+
+        query = self.prepare_query(
+            db,
+            "Person",
+            {
+                "id": Integer(unique=True),
+                "name": Text(unique=True),
+                "salary": Real(unique=True),
+                "img": Blob(unique=True),
+                "any_id": Integer(),
+            },
+            table_primary_key=("id", "name"),
+            foreign_keys=(ForeignKey("any_id", "Any", "id"),),
+        )
+        assert query == (
+            "CREATE TABLE IF NOT EXISTS `Person` ("
+            "`id` INTEGER NOT NULL UNIQUE , "
+            "`name` TEXT NOT NULL UNIQUE , "
+            "`salary` REAL NOT NULL UNIQUE , "
+            "`img` BLOB NOT NULL UNIQUE , "
+            "`any_id` INTEGER NOT NULL , "
+            "PRIMARY KEY(id,name), "
+            "FOREIGN KEY(`any_id`) REFERENCES `Any`(`id`))"
+        )
+
+        query = self.prepare_query(
+            db,
+            "Person",
+            {
+                "id": Integer(nullable=True),
+                "name": Text(nullable=True),
+                "salary": Real(nullable=True),
+                "img": Blob(nullable=True),
+                "any_id": Integer(),
+            },
+            table_primary_key=("id", "name"),
+            foreign_keys=(ForeignKey("any_id", "Any", "id"),),
+        )
+        assert query == (
+            "CREATE TABLE IF NOT EXISTS `Person` ("
+            "`id` INTEGER, "
+            "`name` TEXT, "
+            "`salary` REAL, "
+            "`img` BLOB, "
+            "`any_id` INTEGER NOT NULL , "
+            "PRIMARY KEY(id,name), "
+            "FOREIGN KEY(`any_id`) REFERENCES `Any`(`id`))"
+        )
+
+        query = self.prepare_query(
+            db,
+            "Person",
+            {
+                "id": Integer(primary_key=True, autoincrement=True),
+                "name": Text(nullable=True, unique=True, default='David'),
+                "salary": Real(nullable=True, unique=True, default=100.5),
+                "img": Blob(nullable=True, unique=True),
+                "any_id": Integer(),
+                "any_id2": Integer(),
+            },
+            table_primary_key=("id", "name", "salary"),
+            foreign_keys=(
+                ForeignKey("any_id", "Any", "id"),
+                ForeignKey("any_id2", "Any", "id"),
+            ),
+        )
+        assert query == (
+            "CREATE TABLE IF NOT EXISTS `Person` ("
+            "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL , "
+            "`name` TEXT DEFAULT 'David' UNIQUE , "
+            "`salary` REAL DEFAULT 100.5 UNIQUE , "
+            "`img` BLOB UNIQUE , "
+            "`any_id` INTEGER NOT NULL , "
+            "`any_id2` INTEGER NOT NULL , "
+            "PRIMARY KEY(id,name,salary), "
+            "FOREIGN KEY(`any_id`) REFERENCES `Any`(`id`), "
+            "FOREIGN KEY(`any_id2`) REFERENCES `Any`(`id`))"
+        )
+
 
 class TestInsert:
     """Test for insert obj."""
@@ -302,6 +744,15 @@ class TestUpdate:
         row = db_cls.ttable.get(id=7)
         assert row.name == "TestValue2"
         assert row.salary == 3002
+
+        row = db_cls.ttable.get(id=7)
+        row.name = None
+        row.salary = None
+        row.change()
+
+        row = db_cls.ttable.get(id=7)
+        assert row.name is None
+        assert row.salary is None
 
         db_dict.ttable.update(
             {"salary": 11, "name": "TEST"},
