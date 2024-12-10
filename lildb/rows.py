@@ -179,6 +179,7 @@ def create_result_row(columns_name: Iterable[str]) -> type[Any]:
     return make_dataclass(
         "ResultRow",
         columns,
+        frozen=True,
     )
 
 

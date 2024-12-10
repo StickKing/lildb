@@ -625,7 +625,7 @@ class TestInsert:
         new_row = {
             "id": 1,
             "name": str(uuid.uuid4()),
-            "post": str(uuid.uuid4()),
+            "post": None,
             "salary": randint(1, 10000),
         }
         cursor = db_dict.connect.cursor()
@@ -645,7 +645,7 @@ class TestInsert:
         new_rows = [
             {
                 "id": id_,
-                "name": str(uuid.uuid4()),
+                "name": None,
                 "post": str(uuid.uuid4()),
                 "salary": randint(1, 10000),
             }
