@@ -113,6 +113,17 @@ class TableOperation(Operation, ABC):
             for key, value in data.items()
         )
 
+    def _generate_columns(self, columns: Iterable[str] | None = None) -> str:
+        """Create column str."""
+        columns_names = self.table.column_names
+        table_name = self.table.name
+        if columns:
+            columns_names = columns
+        return ", ".join(
+            f"`{table_name}`.{name}"
+            for name in columns_names
+        )
+
     @abstractmethod
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         ...
@@ -125,17 +136,6 @@ class Select(TableOperation):
         """Fetch base query."""
         columns_str = self._generate_columns(columns)
         return f"SELECT {columns_str} FROM {self.table.name}"  # noqa: S608
-
-    def _generate_columns(self, columns: Iterable[str] | None = None) -> str:
-        """Create column str."""
-        columns_names = self.table.column_names
-        table_name = self.table.name
-        if columns:
-            columns_names = columns
-        return ", ".join(
-            f"`{table_name}`.{name}"
-            for name in columns_names
-        )
 
     def _execute(
         self,
@@ -370,6 +370,131 @@ class Update(TableOperation):
         if condition:
             query = f"{query} WHERE {condition}"
         self.table.execute(query, data)  # type: ignore
+
+
+class Query(TableOperation):
+    """Create sql query with more params."""
+
+    _body = None
+    _filters = ()
+    _orders = ()
+    _limit = 0
+    _offset = 0
+
+    def __init__(
+        self,
+        table: Table | None = None,
+        *args: str,
+    ) -> None:
+        """Initialize query and create it body
+
+        Args:
+            rowcls (ABCRow | None, optional): row cls for existens table.
+                Defaults to None.
+            *args (str): used instead of rowcls for specific
+                situation
+        """
+        self.table = table
+        if table is not None:
+            self.table = table
+            self._body = self._generate_columns()
+            return
+        if not args:
+            msg = "Specify arguments or rowcls"
+            raise ValueError(msg)
+        self._body = self._generate_columns(args)
+
+    def _create_query_str(self) -> str:
+        """Create sql query with all existent attrs."""
+        where_str = ", ".join(self._filters)
+        if where_str:
+            where_str = "WHERE " + where_str
+
+        limit_str = ""
+        if self._limit:
+            limit_str = f"LIMIT {self._limit}"
+            if self._offset:
+                limit_str += f" OFFSET {self._offset}"
+
+        order_by_str = ", ".join(self._orders)
+        if order_by_str:
+            order_by_str = "ORDER BY " + order_by_str
+
+        table = self.table.name
+        return "SELECT {} FROM {} {} {} {}".format(
+            self._body,
+            table,
+            where_str,
+            limit_str,
+            order_by_str,
+        ).replace("  ", " ").strip()
+
+    __str__ = _create_query_str
+
+    def limit(self, limit_number: int) -> Query:
+        """Use limit in sql query."""
+        if not isinstance(limit_number, int):
+            msg = f"Limit not be {type(limit_number)}"
+            raise TypeError(msg)
+        self._limit = limit_number
+        return self
+
+    def offset(self, offset_number: int) -> Query:
+        """Use offset in sql query."""
+        if not isinstance(offset_number, int):
+            msg = f"Offset not be {type(offset_number)}"
+            raise TypeError(msg)
+        self._offset = offset_number
+        return self
+
+    def order_by(self, *args: str, **orders: Literal["asc", "desc"]) -> Query:
+        """Use order by in query."""
+        order_types = {"asc", "desc"}
+        if args:
+            self._orders += tuple(args)
+            return self
+
+        assert all(value.lower() in order_types for value in orders.values())
+        self._orders += tuple(
+            f"{key} {value}"
+            for key, value in orders.items()
+        )
+        return self
+
+    def where(
+        self,
+        condition: str | None = None,
+        operator: TOperator = "AND",
+        **filter_by: Any,
+    ) -> Query:
+        """Use where construction in sql query."""
+        # TODO (stickking): check operator and remove from it ','
+        # 0000
+        if condition:
+            self._filters += (condition,)
+            return self
+        self._filters += (
+            self._make_operator_query(
+                filter_by,
+                operator,
+                without_parameters=True,
+            ),
+        )
+        return self
+
+    def exists(self) -> bool:
+        """Contain all query in exists command."""
+        raise NotImplementedError
+
+    def first(self) -> ABCRow:
+        """Return first item from query."""
+        raise NotImplementedError
+
+    def all(self) -> ABCRow:
+        """Return first item from query."""
+        raise NotImplementedError
+
+    __call__ = all
 
 
 class CreateTable(Operation):

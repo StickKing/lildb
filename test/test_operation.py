@@ -15,6 +15,7 @@ from lildb.column_types import ForeignKey
 from lildb.column_types import Integer
 from lildb.column_types import Real
 from lildb.column_types import Text
+from lildb.operations import Query
 
 
 @pytest.fixture(scope="package")
@@ -818,3 +819,60 @@ class TestDelete:
         assert db_cls.ttable.get(name="TEST") is None
         assert db_cls.ttable.get(id=9) is None
         assert db_cls.ttable.get(id=10) is None
+
+
+class TestQuery:
+    """Tests for query operation."""
+
+    def test_simple(self, dbs: tuple[DB, ...]) -> None:
+        """Test for delete one row."""
+        db_dict, db_cls = dbs
+        table = db_dict.ttable
+
+        query = Query(table)
+        query.where(name=None)
+
+        assert str(query) == (
+            "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
+            "`ttable`.salary FROM ttable WHERE name is NULL"
+        )
+
+        query = Query(table)
+        query.where(name=None, salary=10)
+
+        assert str(query) == (
+            "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
+            "`ttable`.salary FROM ttable WHERE name is NULL AND salary = 10"
+        )
+
+        query = Query(table)
+        query.limit(10)
+
+        assert str(query) == (
+            "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
+            "`ttable`.salary FROM ttable LIMIT 10"
+        )
+
+        query = Query(table)
+        query.limit(10).offset(10)
+
+        assert str(query) == (
+            "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
+            "`ttable`.salary FROM ttable LIMIT 10 OFFSET 10"
+        )
+
+        query = Query(table)
+        query.order_by("name")
+
+        assert str(query) == (
+            "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
+            "`ttable`.salary FROM ttable  ORDER BY name"
+        )
+
+        query = Query(table)
+        query.order_by("name", "post", "salary")
+
+        assert str(query) == (
+            "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
+            "`ttable`.salary FROM ttable  ORDER BY name, post, salary"
+        )
