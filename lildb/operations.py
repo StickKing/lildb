@@ -113,7 +113,11 @@ class TableOperation(Operation, ABC):
             for key, value in data.items()
         )
 
-    def _generate_columns(self, columns: Iterable[str] | None = None) -> str:
+    def _generate_columns(
+        self,
+        columns: Iterable[str] | None = None,
+        table: Table | None = None,
+    ) -> str:
         """Create column str."""
         columns_names = self.table.column_names
         table_name = self.table.name
@@ -375,61 +379,114 @@ class Update(TableOperation):
 class Query(TableOperation):
     """Create sql query with more params."""
 
-    _body = None
-    _filters = ()
-    _orders = ()
-    _limit = 0
-    _offset = 0
+    _body: str | None
+    _filters: tuple[str, ...]
+    _orders: tuple[str, ...]
+    _limit: int
+    _offset: int
+    columns: Iterable | None
 
     def __init__(
         self,
         table: Table | None = None,
-        *args: str,
     ) -> None:
         """Initialize query and create it body
 
         Args:
             rowcls (ABCRow | None, optional): row cls for existens table.
                 Defaults to None.
-            *args (str): used instead of rowcls for specific
-                situation
         """
         self.table = table
-        if table is not None:
-            self.table = table
-            self._body = self._generate_columns()
-            return
-        if not args:
-            msg = "Specify arguments or rowcls"
-            raise ValueError(msg)
-        self._body = self._generate_columns(args)
 
     def _create_query_str(self) -> str:
         """Create sql query with all existent attrs."""
-        where_str = ", ".join(self._filters)
+        where_str = " ".join(self._filters)
         if where_str:
-            where_str = "WHERE " + where_str
+            where_str = " WHERE " + where_str
 
         limit_str = ""
         if self._limit:
-            limit_str = f"LIMIT {self._limit}"
+            limit_str = f" LIMIT {self._limit}"
             if self._offset:
                 limit_str += f" OFFSET {self._offset}"
 
         order_by_str = ", ".join(self._orders)
         if order_by_str:
-            order_by_str = "ORDER BY " + order_by_str
+            order_by_str = " ORDER BY " + order_by_str
 
         table = self.table.name
-        return "SELECT {} FROM {} {} {} {}".format(
+        return "SELECT {} FROM {}{}{}{}".format(
             self._body,
             table,
             where_str,
             limit_str,
             order_by_str,
-        ).replace("  ", " ").strip()
+        )
 
     __str__ = _create_query_str
+
+    def _as_list_row(
+        self,
+        items: Iterable[tuple[tuple[Any, ...]]],
+    ) -> list[TRow]:
+        """Create list rows."""
+        row_cls = self.table.row_cls
+        columns_name = self.table.column_names
+        if self.columns:
+            row_cls = create_result_row(self.columns)
+            columns_name = self.columns
+        return [
+            row_cls(
+                table=self.table,
+                **dict(zip(columns_name, item)),
+            )
+            for item in items
+        ]
+
+    def _as_generator_row(
+        self,
+        items: Iterable[tuple[tuple[Any, ...]]],
+        *,
+        columns: Iterable[str] | None = None,
+    ) -> Generator[ABCRow, Any, None]:
+        """Create rows generator."""
+        row_cls = self.table.row_cls
+        columns_name = self.table.column_names
+        if columns:
+            row_cls = create_result_row(columns)
+            columns_name = columns
+        for item in items:
+            yield row_cls(
+                table=self.table,
+                **dict(zip(columns_name, item)),
+            )
+
+    def _generate_columns(
+        self,
+        columns: Iterable[str] | None = None,
+    ) -> str:
+        """Create column str."""
+        columns_names = self.table.column_names
+        table_name = self.table.name
+        if columns:
+            columns_names = columns
+        return ", ".join(
+            f"`{table_name}`.{name}"
+            for name in columns_names
+        )
+
+    def _execute(self, query: str, size: int | None = None) -> tuple[Any, ...]:
+        """Execute query."""
+        if size:
+            return self.table.execute(
+                query,
+                size=size,
+                result=ResultFetch.fetchmany,
+            )
+        return self.table.execute(
+            query,
+            result=ResultFetch.fetchall,
+        )
 
     def limit(self, limit_number: int) -> Query:
         """Use limit in sql query."""
@@ -461,9 +518,51 @@ class Query(TableOperation):
         )
         return self
 
+    def _add_condition(
+        self,
+        condition: str,
+        operator: TOperator = "AND",
+    ) -> None:
+        """Adding condition in _filter."""
+        condition = condition.strip().lower()
+        if self._filters:
+            if (
+                condition.startswith("and") or
+                condition.startswith("or")
+            ):
+                self._filters += (condition,)
+                return
+            condition = f"{operator} {condition}"
+            self._filters += (condition,)
+            return
+
+        if condition.startswith("and"):
+            condition = condition.removeprefix("and").strip()
+        elif condition.startswith("or"):
+            condition = condition.removeprefix("or").strip()
+
+        self._filters += (condition,)
+
+    def _add_filters(
+        self,
+        filter_by: Any,
+        filter_operator: TOperator = "AND",
+        operator: TOperator = "AND",
+    ) -> None:
+        filter_str = self._make_operator_query(
+            filter_by,
+            filter_operator,
+            without_parameters=True,
+        )
+        if self._filters:
+            self._filters += (f"{operator} {filter_str}",)
+            return
+        self._filters += (filter_str,)
+
     def where(
         self,
         condition: str | None = None,
+        filter_operator: TOperator = "AND",
         operator: TOperator = "AND",
         **filter_by: Any,
     ) -> Query:
@@ -471,30 +570,88 @@ class Query(TableOperation):
         # TODO (stickking): check operator and remove from it ','
         # 0000
         if condition:
-            self._filters += (condition,)
+            self._add_condition(condition, operator)
             return self
-        self._filters += (
-            self._make_operator_query(
-                filter_by,
-                operator,
-                without_parameters=True,
-            ),
-        )
+        self._add_filters(filter_by, operator, filter_operator)
         return self
 
     def exists(self) -> bool:
         """Contain all query in exists command."""
-        raise NotImplementedError
+        query = self._create_query_str()
+        query = f"SELECT EXISTS({query})"
+        result = self._execute(query)
+        if not result or not result[0]:
+            return False
+        return bool(result[0][0])
 
-    def first(self) -> ABCRow:
+    def first(self) -> ABCRow | None:
         """Return first item from query."""
-        raise NotImplementedError
+        self.limit(1)
+        query = self._create_query_str()
+        result = self._execute(query, 0)
+        items = self._as_list_row(result)
+        if not items:
+            return None
+        return items[0]
 
-    def all(self) -> ABCRow:
+    one = first
+
+    def all(self, size: int = 0) -> ABCRow:
         """Return first item from query."""
-        raise NotImplementedError
+        query = self._create_query_str()
+        result = self._execute(query, size)
+        return self._as_list_row(result)
 
-    __call__ = all
+    def generative_all(self, limit: int) -> Generator[ABCRow, Any, None]:
+        """Return first item from query."""
+        row_cls = self.table.row_cls
+        columns_name = self.table.column_names
+        if self.columns:
+            row_cls = create_result_row(self.columns)
+            columns_name = self.columns
+
+        offset = 0
+        self.limit(limit)
+        while True:
+            self.offset(offset * limit)
+            items = self._execute(self._create_query_str(), 0)
+            offset += 1
+
+            if not items:
+                break
+
+            for item in items:
+                yield row_cls(
+                    table=self.table,
+                    **dict(zip(columns_name, item)),
+                )
+
+    def __iter__(self) -> Iterable:
+        """Iteration by data."""
+        return iter(self.all())
+
+    def __call__(
+        self,
+        *columns: str,
+        table: Table | None = None,
+    ) -> Query:
+        """Initialize base args and create query body."""
+        self._body = None
+        self._filters = ()
+        self._orders = ()
+        self._limit = 0
+        self._offset = 0
+        self.columns = None
+
+        if self.table is None and table:
+            self.table = table
+            self._body = self._generate_columns()
+        elif columns:
+            self.columns = columns
+            self._body = self._generate_columns(columns)
+        else:
+            self._body = self._generate_columns()
+        return self
 
 
 class CreateTable(Operation):

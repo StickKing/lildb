@@ -11,6 +11,7 @@ from typing import Iterator
 from .enumcls import ResultFetch
 from .operations import Delete
 from .operations import Insert
+from .operations import Query
 from .operations import Select
 from .operations import Update
 from .rows import RowDict
@@ -50,6 +51,7 @@ class Table(Generic[TRow]):
         self.use_datacls = use_datacls
 
         # Operations
+        self.query = getattr(self, "query", Query)(self)
         self.select = getattr(self, "select", Select)(self)
         self.insert = getattr(self, "insert", Insert)(self)
         self.delete = getattr(self, "delete", Delete)(self)

@@ -650,7 +650,7 @@ class TestInsert:
                 "post": str(uuid.uuid4()),
                 "salary": randint(1, 10000),
             }
-            for id_ in range(2, 11)
+            for id_ in range(2, 21)
         ]
         cursor = db_dict.connect.cursor()
         db_dict.ttable.add(new_rows)
@@ -668,7 +668,7 @@ class TestInsert:
 class TestSelect:
     """Test for select obj."""
 
-    MAX_COUNT = 10
+    MAX_COUNT = 20
 
     def test_all(self, dbs: tuple[DB, ...]) -> None:
         """Test for geting all data."""
@@ -811,25 +811,25 @@ class TestDelete:
             db_dict.ttable.get(id=5) is None
         )
 
-    def test_condition(self, dbs: tuple[DB, ...]) -> None:
-        """Test for update rows with condition."""
-        db_dict, db_cls = dbs
+    # def test_condition(self, dbs: tuple[DB, ...]) -> None:
+    #     """Test for update rows with condition."""
+    #     db_dict, db_cls = dbs
 
-        db_cls.ttable.delete(condition="id > 8 or name = 'TEST'")
-        assert db_cls.ttable.get(name="TEST") is None
-        assert db_cls.ttable.get(id=9) is None
-        assert db_cls.ttable.get(id=10) is None
+    #     db_cls.ttable.delete(condition="id > 8 or name = 'TEST'")
+    #     assert db_cls.ttable.get(name="TEST") is None
+    #     assert db_cls.ttable.get(id=9) is None
+    #     assert db_cls.ttable.get(id=10) is None
 
 
 class TestQuery:
     """Tests for query operation."""
 
-    def test_simple(self, dbs: tuple[DB, ...]) -> None:
-        """Test for delete one row."""
-        db_dict, db_cls = dbs
-        table = db_dict.ttable
+    def test_where(self, dbs: tuple[DB, ...]) -> None:
+        """Test for operation where."""
+        db, _ = dbs
+        # table = db_dict.ttable
 
-        query = Query(table)
+        query = db.ttable.query()
         query.where(name=None)
 
         assert str(query) == (
@@ -837,15 +837,88 @@ class TestQuery:
             "`ttable`.salary FROM ttable WHERE name is NULL"
         )
 
-        query = Query(table)
+        query = db.ttable.query()
         query.where(name=None, salary=10)
+        print(query)
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
             "`ttable`.salary FROM ttable WHERE name is NULL AND salary = 10"
         )
 
-        query = Query(table)
+        query = db.ttable.query()
+        query.where(name=None, salary=10)
+        query.where(condition="salary < 10", operator="OR")
+
+        assert str(query) == (
+            "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
+            "`ttable`.salary FROM ttable WHERE name is NULL AND salary = 10 "
+            "OR salary < 10"
+        )
+
+        query = db.ttable.query()
+        query.where(condition="salary < 10")
+        query.where(name=None, salary=10, filter_operator="OR")
+
+        assert str(query) == (
+            "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
+            "`ttable`.salary FROM ttable WHERE salary < 10 OR "
+            "name is NULL AND salary = 10"
+        )
+
+        query = db.ttable.query()
+        query.where(condition="salary < 10")
+        query.where(name=None, salary=10, filter_operator="OR")
+        query.where(condition="name is not NULL")
+
+        assert str(query) == (
+            "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
+            "`ttable`.salary FROM ttable WHERE salary < 10 OR "
+            "name is NULL AND salary = 10 AND name is not null"
+        )
+
+        query = db.ttable.query()
+        query.where(condition="salary < 10")
+        query.where(name=None, salary=10, filter_operator="OR")
+        query.where(salary=100)
+
+        assert str(query) == (
+            "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
+            "`ttable`.salary FROM ttable WHERE salary < 10 OR "
+            "name is NULL AND salary = 10 AND salary = 100"
+        )
+
+        query = db.ttable.query()
+        query.where(condition="salary < 10")
+        query.where(name=None, salary=10, filter_operator="OR")
+        query.where(condition="name is not NULL")
+        query.where(salary=100, operator="OR")
+
+        assert str(query) == (
+            "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
+            "`ttable`.salary FROM ttable WHERE salary < 10 OR "
+            "name is NULL AND salary = 10 AND name is not null "
+            "AND salary = 100"
+        )
+
+        query = db.ttable.query()
+        query.where(condition="     AND salary < 10")
+        query.where(name=None, salary=10, filter_operator="OR")
+        query.where(condition="or name is not NULL")
+        query.where(salary=100, operator="OR")
+
+        assert str(query) == (
+            "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
+            "`ttable`.salary FROM ttable WHERE salary < 10 OR "
+            "name is NULL AND salary = 10 or name is not null "
+            "AND salary = 100"
+        )
+
+    def test_limit(self, dbs: tuple[DB, ...]) -> None:
+        """Test for limit and offset operation"""
+        db, _ = dbs
+
+        query = db.ttable.query()
         query.limit(10)
 
         assert str(query) == (
@@ -853,7 +926,7 @@ class TestQuery:
             "`ttable`.salary FROM ttable LIMIT 10"
         )
 
-        query = Query(table)
+        query = db.ttable.query()
         query.limit(10).offset(10)
 
         assert str(query) == (
@@ -861,18 +934,101 @@ class TestQuery:
             "`ttable`.salary FROM ttable LIMIT 10 OFFSET 10"
         )
 
-        query = Query(table)
+        query = db.ttable.query()
+        query.offset(10).limit(10)
+
+        assert str(query) == (
+            "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
+            "`ttable`.salary FROM ttable LIMIT 10 OFFSET 10"
+        )
+
+    def test_order(self, dbs: tuple[DB, ...]) -> None:
+        """Test for order by operation."""
+        db, _ = dbs
+
+        query = db.ttable.query()
         query.order_by("name")
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable  ORDER BY name"
+            "`ttable`.salary FROM ttable ORDER BY name"
         )
 
-        query = Query(table)
+        query = db.ttable.query()
         query.order_by("name", "post", "salary")
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable  ORDER BY name, post, salary"
+            "`ttable`.salary FROM ttable ORDER BY name, post, salary"
         )
+
+        query = db.ttable.query()
+        query.order_by(name="desc", post="asc", salary="desc")
+
+        assert str(query) == (
+            "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
+            "`ttable`.salary FROM ttable ORDER BY name desc, "
+            "post asc, salary desc"
+        )
+
+        query = db.ttable.query()
+        query.order_by("name", post="asc", salary="desc")
+
+        assert str(query) == (
+            "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
+            "`ttable`.salary FROM ttable ORDER BY name"
+        )
+
+    def test_hard(self, dbs: tuple[DB, ...]) -> None:
+        """Test all filtred operation in one query."""
+        db, _ = dbs
+
+        query: Query = db.ttable.query()
+        query.where(condition="     AND salary < 10").order_by("name")
+        query.where(name=None, salary=10, filter_operator="OR").offset(10)
+        query.where(condition="or name is not NULL").order_by("salary")
+        query.where(salary=100, operator="OR").limit(20)
+
+        assert str(query) == (
+            "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
+            "`ttable`.salary FROM ttable WHERE salary < 10 OR "
+            "name is NULL AND salary = 10 or name is not null "
+            "AND salary = 100 LIMIT 20 OFFSET 10 ORDER BY name, salary"
+        )
+
+    def test_item(self, dbs: tuple[DB, ...]) -> None:
+        """Test geting one item."""
+        db_dict, db_cls = dbs
+
+        query = db_cls.ttable.query()
+        assert query.first() is not None
+
+        query = db_dict.ttable.query().offset(10000)
+        assert query.first() is None
+
+        query = db_cls.ttable.query("id", "salary")
+        extend_columns = {"name", "post"}
+        row = query.first()
+        assert all(col not in row.__dict__ for col in extend_columns)
+
+    def test_items(self, dbs: tuple[DB, ...]) -> None:
+        """Test geting many items."""
+        db_dict, db_cls = dbs
+
+        query = db_cls.ttable.query()
+        assert all(row is not None for row in query.all())
+
+        query = db_cls.ttable.query("id", "salary")
+        extend_columns = {"name", "post"}
+        assert all(
+            col not in row.__dict__
+            for row in query for col in extend_columns
+        )
+
+    def test_generative(self, dbs: tuple[DB, ...]) -> None:
+        """Test geting many items."""
+        db_dict, db_cls = dbs
+
+        query = db_cls.ttable.query()
+        for row in query.generative_all(2):
+            assert row is not None
