@@ -16,6 +16,7 @@ from lildb.column_types import Integer
 from lildb.column_types import Real
 from lildb.column_types import Text
 from lildb.operations import Query
+from lildb.sql import func
 
 
 @pytest.fixture(scope="package")
@@ -821,6 +822,27 @@ class TestDelete:
     #     assert db_cls.ttable.get(id=10) is None
 
 
+class TestFunc:
+    """Testing sql func."""
+
+    def test_func(self, dbs: tuple[DB, ...]) -> None:
+        """Test."""
+        assert func.count("name") == "COUNT(name) AS name"
+        assert func.max("name").label("nename") == "MAX(name) AS nename"
+        assert func.min("name") == "MIN(name) AS name"
+        assert func.count("name+asd") == "COUNT(name+asd) AS count"
+        assert func.avg("name * qwe") == "AVG(name * qwe) AS avg"
+        assert func.distinct("name") == "DISTINCT name"
+        assert func.count(func.distinct("name")) == (
+            "COUNT(DISTINCT name)"
+            " AS name"
+        )
+        assert func.lower("name") == "LOWER(name) AS name"
+        assert func.upper("name") == "UPPER(name) AS name"
+        assert func.length("name") == "LENGTH(name) AS name"
+        assert func.random() == "RANDOM() AS random"
+
+
 class TestQuery:
     """Tests for query operation."""
 
@@ -979,6 +1001,49 @@ class TestQuery:
             "`ttable`.salary FROM ttable ORDER BY name"
         )
 
+    def test_group(self, dbs: tuple[DB, ...]) -> None:
+        """Test for group by operation."""
+        db, _ = dbs
+
+        query = db.ttable.query()
+        query.group_by("name")
+
+        assert str(query) == (
+            "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
+            "`ttable`.salary FROM ttable GROUP BY name"
+        )
+
+        query = db.ttable.query(func.avg("id * 10"), "name")
+        query.group_by("name")
+
+        assert str(query) == (
+            "SELECT AVG(id * 10) AS avg, `ttable`.name "
+            "FROM ttable GROUP BY name"
+        )
+
+        query = db.ttable.query(func.avg("id * 10"), "name")
+        query.group_by("name").having(condition="avg > 60")
+
+        assert str(query) == (
+            "SELECT AVG(id * 10) AS avg, `ttable`.name "
+            "FROM ttable GROUP BY name HAVING avg > 60"
+        )
+
+        query = db.ttable.query(func.avg("id * 10"), "name")
+        query.group_by(
+            "name",
+        ).having(
+            condition="avg > 60",
+        ).having(
+            avg=60,
+            filter_operator="OR",
+        )
+
+        assert str(query) == (
+            "SELECT AVG(id * 10) AS avg, `ttable`.name "
+            "FROM ttable GROUP BY name HAVING avg > 60 OR avg = 60"
+        )
+
     def test_hard(self, dbs: tuple[DB, ...]) -> None:
         """Test all filtred operation in one query."""
         db, _ = dbs
@@ -988,12 +1053,14 @@ class TestQuery:
         query.where(name=None, salary=10, filter_operator="OR").offset(10)
         query.where(condition="or name is not NULL").order_by("salary")
         query.where(salary=100, operator="OR").limit(20)
+        query.group_by("name").having(condition="name = 'TEST'")
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
             "`ttable`.salary FROM ttable WHERE salary < 10 OR "
             "name is NULL AND salary = 10 or name is not null "
-            "AND salary = 100 LIMIT 20 OFFSET 10 ORDER BY name, salary"
+            "AND salary = 100 GROUP BY name HAVING name = 'test' "
+            "LIMIT 20 OFFSET 10 ORDER BY name, salary"
         )
 
     def test_item(self, dbs: tuple[DB, ...]) -> None:
@@ -1012,7 +1079,7 @@ class TestQuery:
         assert all(col not in row.__dict__ for col in extend_columns)
 
     def test_items(self, dbs: tuple[DB, ...]) -> None:
-        """Test geting many items."""
+        """Test getting many items."""
         db_dict, db_cls = dbs
 
         query = db_cls.ttable.query()

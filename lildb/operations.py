@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from abc import ABC
 from abc import abstractmethod
+from collections import UserString
 from functools import cached_property
 from typing import TYPE_CHECKING
 from typing import Any
@@ -22,6 +23,7 @@ if TYPE_CHECKING:
     from .column_types import ForeignKey
     from .db import DB
     from .rows import TRow
+    from .sql import SQLBase
     from .table import Table
 
     TOperator = Literal["AND", "and", "OR", "or", ","]
@@ -113,6 +115,19 @@ class TableOperation(Operation, ABC):
             for key, value in data.items()
         )
 
+    @abstractmethod
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        ...
+
+
+class Select(TableOperation):
+    """Component for select and filtred DB data."""
+
+    def query(self, columns: Iterable[str] | None = None) -> str:
+        """Fetch base query."""
+        columns_str = self._generate_columns(columns)
+        return f"SELECT {columns_str} FROM {self.table.name}"  # noqa: S608
+
     def _generate_columns(
         self,
         columns: Iterable[str] | None = None,
@@ -127,19 +142,6 @@ class TableOperation(Operation, ABC):
             f"`{table_name}`.{name}"
             for name in columns_names
         )
-
-    @abstractmethod
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        ...
-
-
-class Select(TableOperation):
-    """Component for select and filtred DB data."""
-
-    def query(self, columns: Iterable[str] | None = None) -> str:
-        """Fetch base query."""
-        columns_str = self._generate_columns(columns)
-        return f"SELECT {columns_str} FROM {self.table.name}"  # noqa: S608
 
     def _execute(
         self,
@@ -379,12 +381,14 @@ class Update(TableOperation):
 class Query(TableOperation):
     """Create sql query with more params."""
 
-    _body: str | None
-    _filters: tuple[str, ...]
-    _orders: tuple[str, ...]
+    _body: str
+    _filters: tuple[Any, ...]
+    _having: tuple[Any, ...]
+    _orders: tuple[Any, ...]
+    _groups: tuple[Any, ...]
     _limit: int
     _offset: int
-    columns: Iterable | None
+    columns: Iterable[str | SQLBase] | None
 
     def __init__(
         self,
@@ -393,7 +397,7 @@ class Query(TableOperation):
         """Initialize query and create it body
 
         Args:
-            rowcls (ABCRow | None, optional): row cls for existens table.
+            rowcls (ABCRow | None, optional): row cls for existents table.
                 Defaults to None.
         """
         self.table = table
@@ -404,21 +408,31 @@ class Query(TableOperation):
         if where_str:
             where_str = " WHERE " + where_str
 
+        group_by_str = ""
+        if self._groups:
+            group_by_str = " GROUP BY " + ", ".join(self._groups)
+
         limit_str = ""
         if self._limit:
             limit_str = f" LIMIT {self._limit}"
             if self._offset:
                 limit_str += f" OFFSET {self._offset}"
 
+        having_str = " ".join(self._having)
+        if having_str:
+            having_str = " HAVING " + having_str
+
         order_by_str = ", ".join(self._orders)
         if order_by_str:
             order_by_str = " ORDER BY " + order_by_str
 
         table = self.table.name
-        return "SELECT {} FROM {}{}{}{}".format(
+        return "SELECT {} FROM {}{}{}{}{}{}".format(
             self._body,
             table,
             where_str,
+            group_by_str,
+            having_str,
             limit_str,
             order_by_str,
         )
@@ -428,13 +442,16 @@ class Query(TableOperation):
     def _as_list_row(
         self,
         items: Iterable[tuple[tuple[Any, ...]]],
-    ) -> list[TRow]:
+    ) -> list[ABCRow]:
         """Create list rows."""
         row_cls = self.table.row_cls
-        columns_name = self.table.column_names
+        columns_name: Iterable[str] = self.table.column_names
         if self.columns:
-            row_cls = create_result_row(self.columns)
-            columns_name = self.columns
+            columns_name = [
+                col.complete_label if isinstance(col, UserString) else col
+                for col in self.columns
+            ]
+            row_cls = create_result_row(columns_name)
         return [
             row_cls(
                 table=self.table,
@@ -443,39 +460,23 @@ class Query(TableOperation):
             for item in items
         ]
 
-    def _as_generator_row(
-        self,
-        items: Iterable[tuple[tuple[Any, ...]]],
-        *,
-        columns: Iterable[str] | None = None,
-    ) -> Generator[ABCRow, Any, None]:
-        """Create rows generator."""
-        row_cls = self.table.row_cls
-        columns_name = self.table.column_names
-        if columns:
-            row_cls = create_result_row(columns)
-            columns_name = columns
-        for item in items:
-            yield row_cls(
-                table=self.table,
-                **dict(zip(columns_name, item)),
-            )
-
     def _generate_columns(
         self,
-        columns: Iterable[str] | None = None,
+        columns: Iterable[str | SQLBase] | None = None,
     ) -> str:
         """Create column str."""
-        columns_names = self.table.column_names
-        table_name = self.table.name
+        columns_names = self.table.column_names  # type: ignore
+        table_name = self.table.name  # type: ignore
         if columns:
-            columns_names = columns
+            columns_names = columns  # type: ignore
         return ", ".join(
             f"`{table_name}`.{name}"
+            if name in self.table.column_names  # type: ignore
+            else str(name)
             for name in columns_names
         )
 
-    def _execute(self, query: str, size: int | None = None) -> tuple[Any, ...]:
+    def _execute(self, query: str, size: int | None = None) -> list[tuple]:
         """Execute query."""
         if size:
             return self.table.execute(
@@ -518,46 +519,64 @@ class Query(TableOperation):
         )
         return self
 
+    def _sum_tuples(self, attr_name: str, value: tuple) -> None:
+        """Summing tuples."""
+        setattr(
+            self,
+            attr_name,
+            getattr(self, attr_name) + value,
+        )
+
     def _add_condition(
         self,
         condition: str,
         operator: TOperator = "AND",
+        in_having: bool = False,
     ) -> None:
         """Adding condition in _filter."""
+        attr_name = "_having" if in_having else "_filters"
         condition = condition.strip().lower()
-        if self._filters:
+        # if self._filters:
+        if getattr(self, attr_name):
             if (
                 condition.startswith("and") or
                 condition.startswith("or")
             ):
-                self._filters += (condition,)
+                self._sum_tuples(attr_name, (condition,))
+                # self._filters += (condition,)
                 return
             condition = f"{operator} {condition}"
-            self._filters += (condition,)
+            self._sum_tuples(attr_name, (condition,))
+            # self._filters += (condition,)
             return
 
         if condition.startswith("and"):
-            condition = condition.removeprefix("and").strip()
+            condition = condition.lstrip("and").strip()
         elif condition.startswith("or"):
-            condition = condition.removeprefix("or").strip()
-
-        self._filters += (condition,)
+            condition = condition.lstrip("or").strip()
+        self._sum_tuples(attr_name, (condition,))
+        # self._filters += (condition,)
 
     def _add_filters(
         self,
         filter_by: Any,
         filter_operator: TOperator = "AND",
         operator: TOperator = "AND",
+        in_having: bool = False,
     ) -> None:
+        attr_name = "_having" if in_having else "_filters"
         filter_str = self._make_operator_query(
             filter_by,
             filter_operator,
             without_parameters=True,
         )
-        if self._filters:
-            self._filters += (f"{operator} {filter_str}",)
+        # if self._filters:
+        if getattr(self, attr_name):
+            self._sum_tuples(attr_name, (f"{operator} {filter_str}",))
+            # self._filters += (f"{operator} {filter_str}",)
             return
-        self._filters += (filter_str,)
+        self._sum_tuples(attr_name, (filter_str,))
+        # self._filters += (filter_str,)
 
     def where(
         self,
@@ -575,6 +594,27 @@ class Query(TableOperation):
         self._add_filters(filter_by, operator, filter_operator)
         return self
 
+    def having(
+        self,
+        condition: str | None = None,
+        filter_operator: TOperator = "AND",
+        operator: TOperator = "AND",
+        **filter_by: Any,
+    ) -> Query:
+        """Use where construction in sql query."""
+        # TODO (stickking): check operator and remove from it ','
+        # 0000
+        if condition:
+            self._add_condition(condition, operator, in_having=True)
+            return self
+        self._add_filters(filter_by, operator, filter_operator, in_having=True)
+        return self
+
+    def group_by(self, *args: str) -> Query:
+        """Use group by operation."""
+        self._groups += tuple(args)
+        return self
+
     def exists(self) -> bool:
         """Contain all query in exists command."""
         query = self._create_query_str()
@@ -583,6 +623,18 @@ class Query(TableOperation):
         if not result or not result[0]:
             return False
         return bool(result[0][0])
+
+    def count(self) -> int:
+        """Contain all query in exists command."""
+        first_column = self._body.split(", ")[0]
+        if not first_column:
+            return 0
+        self._body = f"COUNT({first_column})"
+        query = self._create_query_str()
+        result = self._execute(query)
+        if not result or not result[0]:
+            return 0
+        return result[0][0]
 
     def first(self) -> ABCRow | None:
         """Return first item from query."""
@@ -596,7 +648,7 @@ class Query(TableOperation):
 
     one = first
 
-    def all(self, size: int = 0) -> ABCRow:
+    def all(self, size: int = 0) -> list[ABCRow]:
         """Return first item from query."""
         query = self._create_query_str()
         result = self._execute(query, size)
@@ -632,13 +684,15 @@ class Query(TableOperation):
 
     def __call__(
         self,
-        *columns: str,
+        *columns: str | SQLBase,
         table: Table | None = None,
     ) -> Query:
         """Initialize base args and create query body."""
-        self._body = None
+        self._body = ""
         self._filters = ()
+        self._having = ()
         self._orders = ()
+        self._groups = ()
         self._limit = 0
         self._offset = 0
         self.columns = None

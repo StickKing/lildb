@@ -1,6 +1,7 @@
 """Module contain components for work with db table."""
 from __future__ import annotations
 
+from collections import UserString
 from functools import cached_property
 from typing import TYPE_CHECKING
 from typing import Any
@@ -28,6 +29,89 @@ if TYPE_CHECKING:
 __all__ = (
     "Table",
 )
+
+
+class ResultComparison(UserString):
+    """The result of the comparison."""
+
+
+class Column:
+    """Column."""
+
+    def __init__(self, table: Table, column_name: str) -> None:
+        """Initialize."""
+        self.table = table
+        self.column_name = column_name
+
+    @cached_property
+    def column_name(self) -> str:
+        """Return column name."""
+        return "`{}`.{}".format(
+            self.table.name,
+            self.column_name,
+        )
+
+    def _create_operation(
+        self,
+        operation: str,
+        value: Any,
+    ) -> ResultComparison:
+        """."""
+        if isinstance(value, ResultComparison):
+            return ResultComparison("")
+        if isinstance(value, str):
+            result = "{} {} '{}'".format(
+                self.column_name,
+                operation,
+                value,
+            )
+            return ResultComparison(result)
+        result = "{} {} {}".format(
+            self.column_name,
+            operation,
+            value,
+        )
+        return ResultComparison(result)
+
+    def __eq__(self, value: object) -> ResultComparison:
+        """."""
+        return self._create_operation("=", value)
+
+    def __ne__(self, value: object) -> ResultComparison:
+        """."""
+        return self._create_operation("!=", value)
+
+    def __lt__(self, value: object) -> ResultComparison:
+        """."""
+        return self._create_operation("<", value)
+
+    def __le__(self, value: object) -> ResultComparison:
+        """."""
+        return self._create_operation("<=", value)
+
+    def __gt__(self, value: object) -> ResultComparison:
+        """."""
+        return self._create_operation(">", value)
+
+    def __ge__(self, value: object) -> ResultComparison:
+        """."""
+        return self._create_operation(">=", value)
+
+    def __and__(self, value: object) -> ResultComparison:
+        """."""
+        return self._create_operation("AND", value)
+
+    def __or__(self, value: object) -> ResultComparison:
+        """."""
+        return self._create_operation("OR", value)
+
+    def __rand__(self, value: object) -> ResultComparison:
+        """."""
+        return self._create_operation("AND", value)
+
+    def __ror__(self, value: object) -> ResultComparison:
+        """."""
+        return self._create_operation("OR", value)
 
 
 class Table(Generic[TRow]):
@@ -68,7 +152,7 @@ class Table(Generic[TRow]):
     @property
     def execute(
         self,
-    ) -> Callable[..., list[Any] | None]:
+    ) -> Callable[..., list[tuple] | None]:
         """Shortcut for execute.
 
         Args:
