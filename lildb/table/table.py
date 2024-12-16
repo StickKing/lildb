@@ -1,7 +1,6 @@
 """Module contain components for work with db table."""
 from __future__ import annotations
 
-from collections import UserString
 from functools import cached_property
 from typing import TYPE_CHECKING
 from typing import Any
@@ -9,109 +8,27 @@ from typing import Callable
 from typing import Generic
 from typing import Iterator
 
-from .enumcls import ResultFetch
-from .operations import Delete
-from .operations import Insert
-from .operations import Query
-from .operations import Select
-from .operations import Update
-from .rows import RowDict
-from .rows import TRow
-from .rows import make_row_data_cls
+from ..enumcls import ResultFetch
+from ..operations import Delete
+from ..operations import Insert
+from ..operations import Query
+from ..operations import Select
+from ..operations import Update
+from ..rows import RowDict
+from ..rows import TRow
+from ..rows import make_row_data_cls
+from .column import Columns
 
 
 if TYPE_CHECKING:
     import sqlite3
 
-    from .db import DB
+    from ..db import DB
 
 
 __all__ = (
     "Table",
 )
-
-
-class ResultComparison(UserString):
-    """The result of the comparison."""
-
-
-class Column:
-    """Column."""
-
-    def __init__(self, table: Table, column_name: str) -> None:
-        """Initialize."""
-        self.table = table
-        self.column_name = column_name
-
-    @cached_property
-    def column_name(self) -> str:
-        """Return column name."""
-        return "`{}`.{}".format(
-            self.table.name,
-            self.column_name,
-        )
-
-    def _create_operation(
-        self,
-        operation: str,
-        value: Any,
-    ) -> ResultComparison:
-        """."""
-        if isinstance(value, ResultComparison):
-            return ResultComparison("")
-        if isinstance(value, str):
-            result = "{} {} '{}'".format(
-                self.column_name,
-                operation,
-                value,
-            )
-            return ResultComparison(result)
-        result = "{} {} {}".format(
-            self.column_name,
-            operation,
-            value,
-        )
-        return ResultComparison(result)
-
-    def __eq__(self, value: object) -> ResultComparison:
-        """."""
-        return self._create_operation("=", value)
-
-    def __ne__(self, value: object) -> ResultComparison:
-        """."""
-        return self._create_operation("!=", value)
-
-    def __lt__(self, value: object) -> ResultComparison:
-        """."""
-        return self._create_operation("<", value)
-
-    def __le__(self, value: object) -> ResultComparison:
-        """."""
-        return self._create_operation("<=", value)
-
-    def __gt__(self, value: object) -> ResultComparison:
-        """."""
-        return self._create_operation(">", value)
-
-    def __ge__(self, value: object) -> ResultComparison:
-        """."""
-        return self._create_operation(">=", value)
-
-    def __and__(self, value: object) -> ResultComparison:
-        """."""
-        return self._create_operation("AND", value)
-
-    def __or__(self, value: object) -> ResultComparison:
-        """."""
-        return self._create_operation("OR", value)
-
-    def __rand__(self, value: object) -> ResultComparison:
-        """."""
-        return self._create_operation("AND", value)
-
-    def __ror__(self, value: object) -> ResultComparison:
-        """."""
-        return self._create_operation("OR", value)
 
 
 class Table(Generic[TRow]):
@@ -143,6 +60,9 @@ class Table(Generic[TRow]):
 
         # Sugar
         self.add = self.insert
+
+        self.c = Columns(self)
+        self.columns = self.c
 
     @property
     def cursor(self) -> sqlite3.Cursor:

@@ -25,6 +25,19 @@ __all__ = (
 )
 
 
+FUNC_NAMES = {
+    "avg",
+    "sum",
+    "min",
+    "max",
+    "count",
+    "random",
+    "lower",
+    "upper",
+    "length",
+}
+
+
 class ChangedUserStr(UserString):
     """User str."""
 
@@ -129,6 +142,13 @@ class Func:
 
     def __getattr__(self, name: TFunc) -> type[TFuncCLS]:
         """Create func for column."""
+        if name not in FUNC_NAMES:
+            msg = "{} {} {}".format(
+                self.__class__.__name__,
+                "object has no attribute",
+                name,
+            )
+            raise AttributeError(msg)
         func_cls = type(
             name.upper(),
             (SQLBase,),

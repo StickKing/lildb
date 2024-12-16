@@ -896,7 +896,7 @@ class TestQuery:
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
             "`ttable`.salary FROM ttable WHERE salary < 10 OR "
-            "name is NULL AND salary = 10 AND name is not null"
+            "name is NULL AND salary = 10 AND name is not NULL"
         )
 
         query = db.ttable.query()
@@ -919,7 +919,7 @@ class TestQuery:
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
             "`ttable`.salary FROM ttable WHERE salary < 10 OR "
-            "name is NULL AND salary = 10 AND name is not null "
+            "name is NULL AND salary = 10 AND name is not NULL "
             "AND salary = 100"
         )
 
@@ -932,7 +932,7 @@ class TestQuery:
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
             "`ttable`.salary FROM ttable WHERE salary < 10 OR "
-            "name is NULL AND salary = 10 or name is not null "
+            "name is NULL AND salary = 10 or name is not NULL "
             "AND salary = 100"
         )
 
@@ -1058,8 +1058,8 @@ class TestQuery:
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
             "`ttable`.salary FROM ttable WHERE salary < 10 OR "
-            "name is NULL AND salary = 10 or name is not null "
-            "AND salary = 100 GROUP BY name HAVING name = 'test' "
+            "name is NULL AND salary = 10 or name is not NULL "
+            "AND salary = 100 GROUP BY name HAVING name = 'TEST' "
             "LIMIT 20 OFFSET 10 ORDER BY name, salary"
         )
 

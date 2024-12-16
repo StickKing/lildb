@@ -127,6 +127,58 @@ db.person.insert(persons)
 db.person.add(persons)
 ```
 
+## Query
+You can use 'query' to create a more complex sql-query. But it unstable.
+
+```python
+person_tb = db.person
+
+# Return all data from person table
+query = db.person.query().all()
+
+# Return first row from person table
+query = db.person.query().first()
+
+# Use id and name column
+query = db.person.query(person_tb.c.id, person_tb.c.name)
+
+# Use sql func on column
+query = db.person.query(person_tb.c.name.length)
+query = db.person.query(person_tb.c.name.lower)
+query = db.person.query(person_tb.c.id.max)
+
+query = db.person.query(person_tb.c.name.upper.label("upper_name"))
+# SELECT UPPER(`Person`.name) AS upper_name FROM Person
+
+# Return data with id = 1
+query = db.person.query().where(id=1)
+# Alternative
+query = db.person.query().where(person_tb.c.id == 1)
+query = db.person.query().where(condition="id = 1")
+
+query = db.person.query().where(id=1, name="David", filter_operator="AND")
+
+# Various conditions
+query = db.person.query().where(
+    (person_tb.c.name == "David") | (person_tb.c.id == 2)
+)
+
+# Limit data
+query.limit(10).offset(2)
+
+# Group by data
+query.group_by(person_tb.c.salary)
+
+# Order data
+query.order_by(person_tb.c.id)
+
+# Check exists
+query.exists()
+
+# Check row count
+query.count()
+```
+
 ## Select data
 
 Get all data from table:

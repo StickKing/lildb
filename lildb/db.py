@@ -20,7 +20,7 @@ from typing import Sequence
 
 from .enumcls import ResultFetch
 from .operations import CreateTable
-from .table import Table
+from .table.table import Table
 
 
 __all__ = (

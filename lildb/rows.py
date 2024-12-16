@@ -15,7 +15,7 @@ from typing import TypeVar
 
 
 if TYPE_CHECKING:
-    from .table import Table
+    from .table.table import Table
 
 
 TRow = TypeVar("TRow", bound="ABCRow")
