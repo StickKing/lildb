@@ -143,11 +143,11 @@ query = db.person.query().first()
 query = db.person.query(person_tb.c.id, person_tb.c.name)
 
 # Use sql func on column
-query = db.person.query(person_tb.c.name.length)
-query = db.person.query(person_tb.c.name.lower)
-query = db.person.query(person_tb.c.id.max)
+query = db.person.query(person_tb.c.name.length())
+query = db.person.query(person_tb.c.name.lower())
+query = db.person.query(person_tb.c.id.max())
 
-query = db.person.query(person_tb.c.name.upper.label("upper_name"))
+query = db.person.query(person_tb.c.name.upper().label("upper_name"))
 # SELECT UPPER(`Person`.name) AS upper_name FROM Person
 
 # Return data with id = 1

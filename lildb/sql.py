@@ -2,8 +2,12 @@
 from __future__ import annotations
 
 from collections import UserString
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 from typing import TypeVar
+
+
+if TYPE_CHECKING:
+    from .table import Column
 
 
 TFunc = Literal[
@@ -41,12 +45,17 @@ FUNC_NAMES = {
 class ChangedUserStr(UserString):
     """User str."""
 
-    def __init__(self, seq: object) -> None:
+    def __init__(self, seq: str | UserString | Column) -> None:
         """Initialize"""
         if isinstance(seq, str):
             self._data = seq
         elif isinstance(seq, UserString):
             self._data = str(seq)
+        elif hasattr(seq, "_column_name"):
+            # if Column
+            self._data = str(seq)
+            self._label = seq._column_name
+            return
         else:
             self._data = str(seq)
         self._label: str | None = None

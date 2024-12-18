@@ -1060,7 +1060,7 @@ class TestQuery:
             "`ttable`.salary FROM ttable WHERE salary < 10 OR "
             "name is NULL AND salary = 10 or name is not NULL "
             "AND salary = 100 GROUP BY name HAVING name = 'TEST' "
-            "LIMIT 20 OFFSET 10 ORDER BY name, salary"
+            "ORDER BY name, salary LIMIT 20 OFFSET 10"
         )
 
     def test_item(self, dbs: tuple[DB, ...]) -> None:

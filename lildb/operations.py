@@ -17,10 +17,11 @@ from .column_types import BaseType
 from .enumcls import ResultFetch
 from .rows import ABCRow
 from .rows import create_result_row
-from .sql import SQLBase
 
 
 if TYPE_CHECKING:
+    from .table import Column
+    from .sql import SQLBase
     from .column_types import ForeignKey
     from .db import DB
     from .rows import TRow
@@ -31,6 +32,7 @@ if TYPE_CHECKING:
 
 
 __all__ = (
+    "Query",
     "Select",
     "Insert",
     "Delete",
@@ -465,13 +467,10 @@ class Query(TableOperation):
             for item in items
         ]
 
-    def _prepare_column(self, column: str | SQLBase) -> str:
+    def _prepare_column(self, column: str | SQLBase | Column) -> str:
         """Prepare one column."""
-        if (
-            isinstance(column, SQLBase) or
-            column.__class__.__name__ == "Column"
-        ):
-            return str(column)
+        # if column is Column or SQLBase
+        column = str(column)
         if column in self.table.column_names:
             return f"`{self.table.name}`.{column}"
         return column

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from numbers import Number
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 from typing import Any
 from typing import Iterable
 
@@ -158,7 +158,7 @@ class Column:
         query = self.in_(value)
         return query.replace("IN", "NOT IN")
 
-    def __getattr__(self, name: TFunc) -> type[TFuncCLS]:
+    def __getattr__(self, name: TFunc) -> Callable[[], TFuncCLS]:
         """Realize sql funcs."""
         FUNC_NAMES = {
             "avg",
@@ -178,7 +178,7 @@ class Column:
             )
             raise AttributeError(msg)
         func_cls = getattr(func, name)
-        return func_cls(self._full_column_name).label(self._column_name)
+        return lambda: func_cls(self)
 
     def __str__(self) -> str:
         """Return column full name."""
