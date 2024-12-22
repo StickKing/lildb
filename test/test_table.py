@@ -22,11 +22,6 @@ class TestTable:
         """
         table = db.ttable
 
-        table.c.id.avg()
-        table.c.id.count()
-        table.c.id.sum()
-        table.c.id.upper()
-        table.c.id.lower()
         assert table.c.id.avg() == "AVG(`ttable`.id) AS id"
         assert table.c.id.count() == "COUNT(`ttable`.id) AS id"
         assert table.c.id.sum() == "SUM(`ttable`.id) AS id"

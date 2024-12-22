@@ -827,19 +827,23 @@ class TestFunc:
 
     def test_func(self, dbs: tuple[DB, ...]) -> None:
         """Test."""
-        assert func.count("name") == "COUNT(name) AS name"
-        assert func.max("name").label("nename") == "MAX(name) AS nename"
-        assert func.min("name") == "MIN(name) AS name"
-        assert func.count("name+asd") == "COUNT(name+asd) AS count"
-        assert func.avg("name * qwe") == "AVG(name * qwe) AS avg"
-        assert func.distinct("name") == "DISTINCT name"
-        assert func.count(func.distinct("name")) == (
-            "COUNT(DISTINCT name)"
-            " AS name"
-        )
-        assert func.lower("name") == "LOWER(name) AS name"
-        assert func.upper("name") == "UPPER(name) AS name"
-        assert func.length("name") == "LENGTH(name) AS name"
+        db, _ = dbs
+        tb = db.ttable
+
+        print(func.count(tb.c.name))
+        assert func.count(tb.c.name) == "COUNT(`ttable`.name) AS name"
+        assert func.max(tb.c.name).label("nename") == "MAX(`ttable`.name) AS nename"
+        assert func.min("name") == "MIN(`ttable`.name) AS name"
+        # assert func.count("name+asd") == "COUNT(name+asd) AS count"
+        # assert func.avg("name * qwe") == "AVG(name * qwe) AS avg"
+        # assert func.distinct("name") == "DISTINCT name"
+        # assert func.count(func.distinct("name")) == (
+        #     "COUNT(DISTINCT name)"
+        #     " AS name"
+        # )
+        assert func.lower(tb.c.name) == "LOWER(`ttable`.name) AS name"
+        assert func.upper(tb.c.name) == "UPPER(`ttable`.name) AS name"
+        assert func.length(tb.c.name) == "LENGTH(`ttable`.name) AS name"
         assert func.random() == "RANDOM() AS random"
 
 

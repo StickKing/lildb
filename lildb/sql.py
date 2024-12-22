@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 from collections import UserString
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
+from typing import Any
+from typing import Literal
+from typing import Sequence
 from typing import TypeVar
 
 
@@ -71,8 +74,14 @@ class ChangedUserStr(UserString):
         self._data = value
 
 
-class SQLBase(ChangedUserStr):
+class SQLBase:
     """Base sql function or operation."""
+
+    def __init__(self, *args: Any, template: str = "{}({}) AS {}") -> None:
+        """Initialize"""
+        self.template = template
+        self._data = args
+        self._label: str | None = None
 
     def label(self, name: str) -> SQLBase:
         """Create AS label."""
@@ -85,24 +94,70 @@ class SQLBase(ChangedUserStr):
         if self._label:
             return self._label
 
+        label = "_".join(
+            column._column_name
+            for column in self._data
+            if hasattr(column, "_column_name")
+        )
+
+        if label:
+            return label
+
         label = self.__class__.__name__.lower()
-        if bool(self._data.replace("*", "")) is False or not self._data:
-            return f"{label}"
+        return label
 
-        for operator in {"*", "-", "+"}:
-            if operator in self._data:
-                return f"{label}"
+    @property
+    def data(self) -> str:
+        """Return completed."""
+        return ", ".join(
+            f"'{arg}'" if isinstance(arg, str) else str(arg)
+            for arg in self._data
+        )
 
-        if "DISTINCT" in self._data:
-            return self._data.replace("DISTINCT ", "")
-
-        return self._data
+    @data.setter
+    def data(self, value: Sequence) -> None:
+        """Return completed."""
+        self._data = value
 
     def __str__(self) -> str:
         """Create string view"""
         operation = self.__class__.__name__.upper()
         label = self.complete_label
-        return f"{operation}({self._data}) AS {label}"
+        return self.template.format(operation, self.data, label)
+
+
+# class SQLBase(ChangedUserStr):
+#     """Base sql function or operation."""
+
+#     def label(self, name: str) -> SQLBase:
+#         """Create AS label."""
+#         self._label = name
+#         return self
+
+#     @property
+#     def complete_label(self) -> str | None:
+#         """Prepare label for command"""
+#         if self._label:
+#             return self._label
+
+#         label = self.__class__.__name__.lower()
+#         if bool(self._data.replace("*", "")) is False or not self._data:
+#             return f"{label}"
+
+#         for operator in {"*", "-", "+"}:
+#             if operator in self._data:
+#                 return f"{label}"
+
+#         if "DISTINCT" in self._data:
+#             return self._data.replace("DISTINCT ", "")
+
+#         return self._data
+
+#     def __str__(self) -> str:
+#         """Create string view"""
+#         operation = self.__class__.__name__.upper()
+#         label = self.complete_label
+#         return f"{operation}({self._data}) AS {label}"
 
 
 class Distinct(ChangedUserStr):
@@ -172,3 +227,11 @@ class Func:
 
 
 func = Func()
+
+
+class Test(SQLBase):
+    pass
+
+t = Test("name", 10, "salary", 20)
+
+print(f"'{t}'")
