@@ -44,6 +44,8 @@ __all__ = (
 class Operation(ABC):
     """Base operation."""
 
+    __slots__ = ()
+
     @abstractmethod
     def __init__(self) -> None:
         ...
@@ -382,6 +384,17 @@ class Update(TableOperation):
 
 class Query(TableOperation):
     """Create sql query with more params."""
+
+    __slots__ = (
+        "_body",
+        "_filters",
+        "_having",
+        "_orders",
+        "_groups",
+        "_limit",
+        "_offset",
+        "columns",
+    )
 
     _body: str
     _filters: tuple[Any, ...]
@@ -744,6 +757,8 @@ class Query(TableOperation):
 
 class CreateTable(Operation):
     """Create table object."""
+
+    __slots__ = ("db", )
 
     def __init__(self, db: DB) -> None:
         """Initialize."""

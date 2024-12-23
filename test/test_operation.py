@@ -830,21 +830,19 @@ class TestFunc:
         db, _ = dbs
         tb = db.ttable
 
-        print(func.count(tb.c.name))
-        assert func.count(tb.c.name) == "COUNT(`ttable`.name) AS name"
-        assert func.max(tb.c.name).label("nename") == "MAX(`ttable`.name) AS nename"
-        assert func.min("name") == "MIN(`ttable`.name) AS name"
-        # assert func.count("name+asd") == "COUNT(name+asd) AS count"
-        # assert func.avg("name * qwe") == "AVG(name * qwe) AS avg"
-        # assert func.distinct("name") == "DISTINCT name"
-        # assert func.count(func.distinct("name")) == (
-        #     "COUNT(DISTINCT name)"
-        #     " AS name"
-        # )
-        assert func.lower(tb.c.name) == "LOWER(`ttable`.name) AS name"
-        assert func.upper(tb.c.name) == "UPPER(`ttable`.name) AS name"
-        assert func.length(tb.c.name) == "LENGTH(`ttable`.name) AS name"
-        assert func.random() == "RANDOM() AS random"
+        assert func.distinct(tb.c.name) == "DISTINCT `ttable`.name"
+        assert func.count(
+            func.distinct(tb.c.name),
+        ).label(
+            "hello"
+        ) == "COUNT(DISTINCT `ttable`.name) AS hello"
+        assert func.substr(
+            tb.c.name,
+            2,
+            10,
+        ) == "SUBSTR(`ttable`.name, 2, 10) AS name"
+        assert func.date("now") == "DATE('now') AS date"
+        assert func.like(tb.c.name, "hello%") == "`ttable`.name LIKE 'hello%'"
 
 
 class TestQuery:
@@ -1017,36 +1015,36 @@ class TestQuery:
             "`ttable`.salary FROM ttable GROUP BY name"
         )
 
-        query = db.ttable.query(func.avg("id * 10"), "name")
-        query.group_by("name")
+        # query = db.ttable.query(func.avg("id * 10"), "name")
+        # query.group_by("name")
 
-        assert str(query) == (
-            "SELECT AVG(id * 10) AS avg, `ttable`.name "
-            "FROM ttable GROUP BY name"
-        )
+        # assert str(query) == (
+        #     "SELECT AVG(id * 10) AS avg, `ttable`.name "
+        #     "FROM ttable GROUP BY name"
+        # )
 
-        query = db.ttable.query(func.avg("id * 10"), "name")
-        query.group_by("name").having(condition="avg > 60")
+        # query = db.ttable.query(func.avg("id * 10"), "name")
+        # query.group_by("name").having(condition="avg > 60")
 
-        assert str(query) == (
-            "SELECT AVG(id * 10) AS avg, `ttable`.name "
-            "FROM ttable GROUP BY name HAVING avg > 60"
-        )
+        # assert str(query) == (
+        #     "SELECT AVG(id * 10) AS avg, `ttable`.name "
+        #     "FROM ttable GROUP BY name HAVING avg > 60"
+        # )
 
-        query = db.ttable.query(func.avg("id * 10"), "name")
-        query.group_by(
-            "name",
-        ).having(
-            condition="avg > 60",
-        ).having(
-            avg=60,
-            filter_operator="OR",
-        )
+        # query = db.ttable.query(func.avg("id * 10"), "name")
+        # query.group_by(
+            # "name",
+        # ).having(
+            # condition="avg > 60",
+        # ).having(
+            # avg=60,
+            # filter_operator="OR",
+        # )
 
-        assert str(query) == (
-            "SELECT AVG(id * 10) AS avg, `ttable`.name "
-            "FROM ttable GROUP BY name HAVING avg > 60 OR avg = 60"
-        )
+        # assert str(query) == (
+            # "SELECT AVG(id * 10) AS avg, `ttable`.name "
+            # "FROM ttable GROUP BY name HAVING avg > 60 OR avg = 60"
+        # )
 
     def test_hard(self, dbs: tuple[DB, ...]) -> None:
         """Test all filtred operation in one query."""

@@ -1,19 +1,14 @@
 """Module contain SQL functions and other operation."""
 from __future__ import annotations
 
-from collections import UserString
-from typing import TYPE_CHECKING
 from typing import Any
 from typing import Literal
 from typing import Sequence
 from typing import TypeVar
 
 
-if TYPE_CHECKING:
-    from .table import Column
-
-
 TFunc = Literal[
+    "abs",
     "avg",
     "sum",
     "min",
@@ -23,6 +18,19 @@ TFunc = Literal[
     "lower",
     "upper",
     "length",
+    "distinct",
+    "substr",
+    "like",
+    "ltrim",
+    "rtrim",
+    "trim",
+    "replace",
+    "instr",
+    "date",
+    "time",
+    "datetime",
+    "julianday",
+    "strftime",
 ]
 TFuncCLS = TypeVar("TFuncCLS", bound="SQLBase")
 
@@ -33,6 +41,7 @@ __all__ = (
 
 
 FUNC_NAMES = {
+    "abs",
     "avg",
     "sum",
     "min",
@@ -42,44 +51,31 @@ FUNC_NAMES = {
     "lower",
     "upper",
     "length",
+    "distinct",
+    "substr",
+    "like",
+    "ltrim",
+    "rtrim",
+    "trim",
+    "replace",
+    "instr",
+    "date",
+    "time",
+    "datetime",
+    "julianday",
+    "strftime",
 }
-
-
-class ChangedUserStr(UserString):
-    """User str."""
-
-    def __init__(self, seq: str | UserString | Column) -> None:
-        """Initialize"""
-        if isinstance(seq, str):
-            self._data = seq
-        elif isinstance(seq, UserString):
-            self._data = str(seq)
-        elif hasattr(seq, "_column_name"):
-            # if Column
-            self._data = str(seq)
-            self._label = seq._column_name
-            return
-        else:
-            self._data = str(seq)
-        self._label: str | None = None
-
-    @property
-    def data(self) -> str:
-        """Return completed."""
-        return str(self)
-
-    @data.setter
-    def data(self, value: str) -> None:
-        """Return completed."""
-        self._data = value
 
 
 class SQLBase:
     """Base sql function or operation."""
 
-    def __init__(self, *args: Any, template: str = "{}({}) AS {}") -> None:
+    __slots__ = ()
+
+    template = "{func}({data}) AS {label}"
+
+    def __init__(self, *args: Any) -> None:
         """Initialize"""
-        self.template = template
         self._data = args
         self._label: str | None = None
 
@@ -109,6 +105,11 @@ class SQLBase:
     @property
     def data(self) -> str:
         """Return completed."""
+        if "]}" in self.template:
+            return [
+                f"'{arg}'" if isinstance(arg, str) else str(arg)
+                for arg in self._data
+            ]
         return ", ".join(
             f"'{arg}'" if isinstance(arg, str) else str(arg)
             for arg in self._data
@@ -123,86 +124,21 @@ class SQLBase:
         """Create string view"""
         operation = self.__class__.__name__.upper()
         label = self.complete_label
-        return self.template.format(operation, self.data, label)
+        return self.template.format(**{
+            "func": operation,
+            "data": self.data,
+            "label": label,
+        })
 
-
-# class SQLBase(ChangedUserStr):
-#     """Base sql function or operation."""
-
-#     def label(self, name: str) -> SQLBase:
-#         """Create AS label."""
-#         self._label = name
-#         return self
-
-#     @property
-#     def complete_label(self) -> str | None:
-#         """Prepare label for command"""
-#         if self._label:
-#             return self._label
-
-#         label = self.__class__.__name__.lower()
-#         if bool(self._data.replace("*", "")) is False or not self._data:
-#             return f"{label}"
-
-#         for operator in {"*", "-", "+"}:
-#             if operator in self._data:
-#                 return f"{label}"
-
-#         if "DISTINCT" in self._data:
-#             return self._data.replace("DISTINCT ", "")
-
-#         return self._data
-
-#     def __str__(self) -> str:
-#         """Create string view"""
-#         operation = self.__class__.__name__.upper()
-#         label = self.complete_label
-#         return f"{operation}({self._data}) AS {label}"
-
-
-class Distinct(ChangedUserStr):
-    """Distinct operator."""
-
-    def __str__(self) -> str:
-        """Create string view"""
-        operation = self.__class__.__name__.upper()
-        return f"{operation} {self._data}"
-
-
-class Substr(SQLBase):
-    """Substr operation."""
-
-    def __init__(self, seq: object, start: int, end: int | None = 0) -> None:
-        super().__init__(seq)
-        self._start = start
-        self._end = end
-
-    def __str__(self) -> str:
-        """Create string view"""
-        operation = self.__class__.__name__.upper()
-        label = self.complete_label
-        if not self._end:
-            return "{}({}, {}) AS {}".format(
-                operation,
-                self._data,
-                self._start,
-                label,
-            )
-        return "{}({}, {}, {}) AS {}".format(
-            operation,
-            self._data,
-            self._start,
-            self._end,
-            label,
-        )
+    def __eq__(self, value) -> bool:
+        """Eq operation."""
+        return str(self) == value
 
 
 class Func:
-    """Object with all func."""
+    """Object to generation all sql funcs."""
 
-    def distinct(self, name: str) -> Distinct:
-        """Use distinct."""
-        return Distinct(name)
+    __slots__ = ()
 
     def __getattr__(self, name: TFunc) -> type[TFuncCLS]:
         """Create func for column."""
@@ -218,7 +154,16 @@ class Func:
             (SQLBase,),
             {},
         )
-        if name.lower() == "random":
+
+        name_lower = name.lower()
+
+        if name_lower in "distinct":
+            func_cls.template = "{func} {data}"
+
+        if name_lower == "like":
+            func_cls.template = "{data[0]} {func} {data[1]}"
+
+        if name_lower == "random":
             def __init__(self):
                 self._data = ""
                 self._label = None
@@ -227,11 +172,3 @@ class Func:
 
 
 func = Func()
-
-
-class Test(SQLBase):
-    pass
-
-t = Test("name", 10, "salary", 20)
-
-print(f"'{t}'")
