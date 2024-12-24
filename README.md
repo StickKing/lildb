@@ -370,7 +370,7 @@ class CustomPostTable(Table):
     """Any custom table class."""
 
     # Table name in DB
-    name = "post"
+    table_name = "post"
 
     # Use custom data class row
     row_cls = CustomPostRow

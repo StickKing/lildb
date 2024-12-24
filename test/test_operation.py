@@ -863,7 +863,6 @@ class TestQuery:
 
         query = db.ttable.query()
         query.where(name=None, salary=10)
-        print(query)
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
@@ -1047,7 +1046,7 @@ class TestQuery:
         # )
 
     def test_hard(self, dbs: tuple[DB, ...]) -> None:
-        """Test all filtred operation in one query."""
+        """Test all filtered operation in one query."""
         db, _ = dbs
 
         query: Query = db.ttable.query()
@@ -1068,6 +1067,7 @@ class TestQuery:
     def test_item(self, dbs: tuple[DB, ...]) -> None:
         """Test geting one item."""
         db_dict, db_cls = dbs
+        tb = db_dict.ttable
 
         query = db_cls.ttable.query()
         assert query.first() is not None
@@ -1075,7 +1075,7 @@ class TestQuery:
         query = db_dict.ttable.query().offset(10000)
         assert query.first() is None
 
-        query = db_cls.ttable.query("id", "salary")
+        query = db_cls.ttable.query(tb.c.id, tb.c.salary)
         extend_columns = {"name", "post"}
         row = query.first()
         assert all(col not in row.__dict__ for col in extend_columns)
@@ -1083,11 +1083,12 @@ class TestQuery:
     def test_items(self, dbs: tuple[DB, ...]) -> None:
         """Test getting many items."""
         db_dict, db_cls = dbs
+        tb = db_dict.ttable
 
         query = db_cls.ttable.query()
         assert all(row is not None for row in query.all())
 
-        query = db_cls.ttable.query("id", "salary")
+        query = db_cls.ttable.query(tb.c.id, tb.c.salary)
         extend_columns = {"name", "post"}
         assert all(
             col not in row.__dict__
@@ -1095,9 +1096,14 @@ class TestQuery:
         )
 
     def test_generative(self, dbs: tuple[DB, ...]) -> None:
-        """Test geting many items."""
+        """Test getting many items."""
         db_dict, db_cls = dbs
+        tb = db_dict.ttable
 
         query = db_cls.ttable.query()
+        for row in query.generative_all(2):
+            assert row is not None
+
+        query = db_cls.ttable.query(tb.c.name)
         for row in query.generative_all(2):
             assert row is not None

@@ -34,8 +34,23 @@ __all__ = (
 class Table(Generic[TRow]):
     """Component for work with table."""
 
+    # __slots__ = (
+    #     "_name",
+    #     "query",
+    #     "select",
+    #     "insert",
+    #     "delete",
+    #     "update",
+    #     "use_datacls",
+    #     "c",
+    #     "columns",
+    #     "add",
+    #     "db",
+    #     "column_names",
+    # )
+
     row_cls: type[TRow] = RowDict  # type: ignore
-    name: str | None = None
+    table_name: str | None = None
 
     def __init__(
         self,
@@ -44,7 +59,7 @@ class Table(Generic[TRow]):
         use_datacls: bool = False,
     ) -> None:
         """Initialize."""
-        self.name = self.name or name
+        self.name = self.table_name or name
         if self.name is None:
             msg = "Table name do not be None."
             raise ValueError(msg)
@@ -63,6 +78,16 @@ class Table(Generic[TRow]):
 
         self.c = Columns(self)
         self.columns = self.c
+
+    @property
+    def name(self) -> str:
+        """Return table name."""
+        return self._name
+
+    @name.setter
+    def name(self, value: str) -> None:
+        """Return table name."""
+        self._name = value
 
     @property
     def cursor(self) -> sqlite3.Cursor:

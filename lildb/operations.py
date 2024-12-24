@@ -3,8 +3,6 @@ from __future__ import annotations
 
 from abc import ABC
 from abc import abstractmethod
-from collections import UserString
-from functools import cached_property
 from typing import TYPE_CHECKING
 from typing import Any
 from typing import Generator
@@ -20,11 +18,11 @@ from .rows import create_result_row
 
 
 if TYPE_CHECKING:
-    from .table import Column
-    from .sql import SQLBase
     from .column_types import ForeignKey
     from .db import DB
     from .rows import TRow
+    from .sql import SQLBase
+    from .table import Column
     from .table import Table
 
     TOperator = Literal["AND", "and", "OR", "or", ","]
@@ -85,6 +83,8 @@ class Operation(ABC):
 class TableOperation(Operation, ABC):
     """Base operation."""
 
+    __slots__ = ("table",)
+
     def __init__(self, table: Table) -> None:
         self.table = table
 
@@ -125,7 +125,9 @@ class TableOperation(Operation, ABC):
 
 
 class Select(TableOperation):
-    """Component for select and filtred DB data."""
+    """Component for select and filtered DB data."""
+
+    __slots__ = ()
 
     def query(self, columns: Iterable[str] | None = None) -> str:
         """Fetch base query."""
@@ -264,6 +266,8 @@ class Select(TableOperation):
 class Insert(TableOperation):
     """Component for insert data in DB."""
 
+    __slots__ = ()
+
     def query(
         self,
         data: Sequence[TQueryData],
@@ -294,6 +298,8 @@ class Insert(TableOperation):
 
 class Delete(TableOperation):
     """Component for delete row from db."""
+
+    __slots__ = ()
 
     def query(self) -> str:
         """Fetch base delete query."""
@@ -343,10 +349,11 @@ class Delete(TableOperation):
 class Update(TableOperation):
     """Component for updating table row."""
 
-    @cached_property
-    def query(self) -> str:
-        """Return base str query."""
-        return f"UPDATE {self.table.name} SET "  # noqa: S608
+    __slots__ = ("query",)
+
+    def __init__(self, table: Table) -> None:
+        super().__init__(table)
+        self.query = f"UPDATE {self.table.name} SET "
 
     def __call__(
         self,
@@ -462,15 +469,7 @@ class Query(TableOperation):
         row_cls = self.table.row_cls
         columns_name: Iterable[str] = self.table.column_names
         if self.columns:
-            columns_name = [
-                col.complete_label
-                if (
-                    isinstance(col, UserString) or
-                    col.__class__.__name__ == "Column"
-                )
-                else col
-                for col in self.columns
-            ]
+            columns_name = self.result_row_column_names
             row_cls = create_result_row(columns_name)
         return [
             row_cls(
@@ -478,6 +477,14 @@ class Query(TableOperation):
                 **dict(zip(columns_name, item)),
             )
             for item in items
+        ]
+
+    @property
+    def result_row_column_names(self) -> list[str]:
+        """Prepare column names for class row."""
+        return [
+            col.row_name
+            for col in self.columns
         ]
 
     def _prepare_column(self, column: str | SQLBase | Column) -> str:
@@ -488,7 +495,7 @@ class Query(TableOperation):
             return f"`{self.table.name}`.{column}"
         return column
 
-    def _generate_columns(
+    def _generate_column_names(
         self,
         columns: Iterable[str | SQLBase] | None = None,
     ) -> str:
@@ -501,12 +508,6 @@ class Query(TableOperation):
             self._prepare_column(name)
             for name in columns_names
         )
-        # return ", ".join(
-        #     f"`{table_name}`.{name}"
-        #     if name in self.table.column_names and isinstance()  # type: ignore
-        #     else str(name)
-        #     for name in columns_names
-        # )
 
     def _execute(self, query: str, size: int | None = None) -> list[tuple]:
         """Execute query."""
@@ -650,9 +651,9 @@ class Query(TableOperation):
         self._add_filters(filter_by, operator, filter_operator, in_having=True)
         return self
 
-    def group_by(self, *args: str) -> Query:
+    def group_by(self, *args: str | Column) -> Query:
         """Use group by operation."""
-        self._groups += tuple(map(lambda i: str(i), args))
+        self._groups += tuple(map(str, args))
         return self
 
     def exists(self) -> bool:
@@ -706,8 +707,8 @@ class Query(TableOperation):
         row_cls = self.table.row_cls
         columns_name = self.table.column_names
         if self.columns:
-            row_cls = create_result_row(self.columns)
-            columns_name = self.columns
+            columns_name = self.result_row_column_names
+            row_cls = create_result_row(columns_name)
 
         offset = 0
         self.limit(limit)
@@ -731,7 +732,7 @@ class Query(TableOperation):
 
     def __call__(
         self,
-        *columns: str | SQLBase,
+        *columns: SQLBase | Column,
         table: Table | None = None,
     ) -> Query:
         """Initialize base args and create query body."""
@@ -746,12 +747,12 @@ class Query(TableOperation):
 
         if self.table is None and table:
             self.table = table
-            self._body = self._generate_columns()
+            self._body = self._generate_column_names()
         elif columns:
             self.columns = columns
-            self._body = self._generate_columns(columns)
+            self._body = self._generate_column_names(columns)
         else:
-            self._body = self._generate_columns()
+            self._body = self._generate_column_names()
         return self
 
 

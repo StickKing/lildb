@@ -2,16 +2,17 @@
 from __future__ import annotations
 
 from numbers import Number
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 from typing import Any
+from typing import Callable
 from typing import Iterable
-
-from lildb.operations import Query
 
 from ..sql import func
 
 
 if TYPE_CHECKING:
+    from lildb.operations import Query
+
     from ..sql import TFunc
     from ..sql import TFuncCLS
     from .table import Table
@@ -132,11 +133,11 @@ class Column:
         """."""
         return self._create_operation(">=", value)
 
-    def is_(self, value: object):
+    def is_(self, value: object) -> ResultComparison:
         """."""
         return self._create_operation("IS", value)
 
-    def is_not(self, value: object):
+    def is_not(self, value: object) -> ResultComparison:
         """."""
         return self._create_operation("IS NOT", value)
 
@@ -145,12 +146,14 @@ class Column:
         if not value:
             msg = "Value could not be empty"
             raise ValueError(msg)
-        if isinstance(value, Query):
+        if isinstance(value, Iterable):
+            if isinstance(value[0], Number):
+                value = "(" + ", ".join(str(i) for i in value) + ")"
+            elif isinstance(value[0], str):
+                value = "(" + ", ".join(f"'{i}'"for i in value) + ")"
+        else:
+            # if Query
             value = "({})".format(str(value))
-        elif isinstance(value[0], Number):
-            value = "(" + ", ".join(str(i) for i in value) + ")"
-        elif isinstance(value[0], str):
-            value = "(" + ", ".join(f"'{i}'"for i in value) + ")"
         return self._create_operation("IN", value, in_operation=True)
 
     def not_in(self, value: Iterable | Query) -> str:
@@ -184,8 +187,15 @@ class Column:
         """Return column full name."""
         return self._full_column_name
 
+    @property
+    def row_name(self) -> str:
+        """Row name."""
+        return self._column_name
+
 
 class Columns:
+
+    __slots__ = ("_table",)
 
     def __init__(self, table: Table) -> None:
         """Initialize."""

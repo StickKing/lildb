@@ -20,9 +20,8 @@ class TestTable:
         Simple creating table test without types,
         table primary keys and foreign keys.
         """
-        table = db.ttable
-        print(table.c.id.avg())
-        assert table.c.id.avg() == "AVG(`ttable`.id) AS id"
+        tb = db.ttable
+        assert tb.c.id.avg() == "AVG(`ttable`.id) AS id"
         # assert table.c.id.count() == "COUNT(`ttable`.id) AS id"
         # assert table.c.id.sum() == "SUM(`ttable`.id) AS id"
         # assert table.c.name.upper() == "UPPER(`ttable`.name) AS name"

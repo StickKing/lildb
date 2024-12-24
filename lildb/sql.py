@@ -70,7 +70,7 @@ FUNC_NAMES = {
 class SQLBase:
     """Base sql function or operation."""
 
-    __slots__ = ()
+    __slots__ = ("_data", "_label")
 
     template = "{func}({data}) AS {label}"
 
@@ -103,7 +103,7 @@ class SQLBase:
         return label
 
     @property
-    def data(self) -> str:
+    def data(self) -> str | list[str]:
         """Return completed."""
         if "]}" in self.template:
             return [
@@ -130,9 +130,14 @@ class SQLBase:
             "label": label,
         })
 
-    def __eq__(self, value) -> bool:
+    def __eq__(self, value: Any) -> bool:
         """Eq operation."""
         return str(self) == value
+
+    @property
+    def row_name(self) -> str:
+        """Row name."""
+        return self.complete_label
 
 
 class Func:
