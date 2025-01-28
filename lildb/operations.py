@@ -622,7 +622,7 @@ class Query(TableOperation):
         # 0000
         if args:
             for arg in args:
-                self._add_condition(arg)
+                self._add_condition(str(arg))
             return self
         if condition:
             self._add_condition(condition, operator)

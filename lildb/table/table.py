@@ -67,7 +67,7 @@ class Table(Generic[TRow]):
         self.use_datacls = use_datacls
 
         # Operations
-        self.query = getattr(self, "query", Query)(self)
+        self._query_obj = getattr(self, "query", Query)
         self.select = getattr(self, "select", Select)(self)
         self.insert = getattr(self, "insert", Insert)(self)
         self.delete = getattr(self, "delete", Delete)(self)
@@ -78,6 +78,11 @@ class Table(Generic[TRow]):
 
         self.c = Columns(self)
         self.columns = self.c
+
+    @property
+    def query(self) -> Query:
+        """Return new query object for this table."""
+        return self._query_obj(self)
 
     @property
     def name(self) -> str:

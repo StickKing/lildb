@@ -131,38 +131,55 @@ db.person.add(persons)
 You can use 'query' to create a more complex sql-query. But it unstable.
 
 ```python
+# Fetch person table obj
 person_tb = db.person
 
+# 'all' and 'first' executing query
+
 # Return all data from person table
-query = db.person.query().all()
+db.person.query().all()
 
 # Return first row from person table
-query = db.person.query().first()
+db.person.query().first()
+
 
 # Use id and name column
-query = db.person.query(person_tb.c.id, person_tb.c.name)
+db.person.query(person_tb.c.id, person_tb.c.name)
 
 # Use sql func on column
-query = db.person.query(person_tb.c.name.length())
-query = db.person.query(person_tb.c.name.lower())
-query = db.person.query(person_tb.c.id.max())
+db.person.query(person_tb.c.name.length())
+db.person.query(person_tb.c.name.lower())
+db.person.query(person_tb.c.id.max())
+db.person.query(person_tb.c.id.is_(None))
+db.person.query(person_tb.c.id.in_([1, 2]))
 
-query = db.person.query(person_tb.c.name.upper().label("upper_name"))
+# Use other funcs
+from lildb.sql import func
+
+db.person.query(func.abs(person_tb.c.id))
+db.person.query(func.distinct(person_tb.c.name))
+db.person.query(func.lower(person_tb.c.name))
+db.person.query().where(
+    func.like(person_tb.c.name, "Dav%") | (person_tb.c.id == 3)
+)
+
+db.person.query(person_tb.c.name.upper().label("upper_name"))
 # SELECT UPPER(`Person`.name) AS upper_name FROM Person
 
 # Return data with id = 1
-query = db.person.query().where(id=1)
+db.person.query().where(id=1)
 # Alternative
-query = db.person.query().where(person_tb.c.id == 1)
-query = db.person.query().where(condition="id = 1")
+db.person.query().where(person_tb.c.id == 1)
+db.person.query().where(condition="id = 1")
 
-query = db.person.query().where(id=1, name="David", filter_operator="AND")
+db.person.query().where(id=1, name="David", filter_operator="AND")
 
 # Various conditions
-query = db.person.query().where(
+db.person.query().where(
     (person_tb.c.name == "David") | (person_tb.c.id == 2)
 )
 
+query = db.person.query()
 # Limit data
 query.limit(10).offset(2)
 

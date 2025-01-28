@@ -141,7 +141,7 @@ class Column:
         """."""
         return self._create_operation("IS NOT", value)
 
-    def in_(self, value: Iterable | Query) -> str:
+    def in_(self, value: Iterable | Query) -> ResultComparison:
         """Realization in operation."""
         if not value:
             msg = "Value could not be empty"
@@ -191,6 +191,20 @@ class Column:
     def row_name(self) -> str:
         """Row name."""
         return self._column_name
+
+    def __and__(self, value: Any) -> None:
+        """Stub."""
+        msg = (
+            "Use parentheses. Like "
+            "(table.c.name = '1') & (table.c.salary.is_(None))"
+        )
+        raise ValueError(msg)
+
+    __or__ = __and__
+
+    __rand__ = __and__
+
+    __ror__ = __and__
 
 
 class Columns:

@@ -31,7 +31,7 @@ def dbs() -> tuple[DB, ...]:
 
 
 class TestCreateTable:
-    """Test Create table operations."""
+    """Test Create table query builder."""
 
     def prepare_query(
         self,

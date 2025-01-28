@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "LilDB"
-version = "0.5.0"
+version = "0.5.5"
 description = "LilDB provides a simplified wrapper for SQLite3."
 authors = ["Anton Panteleev <mainsample@yandex.ru>"]
 readme = "README.md"
