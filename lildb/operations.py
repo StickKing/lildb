@@ -281,7 +281,11 @@ class Insert(TableOperation):
             name
             for name in data[0]
         )
-        return f"INSERT INTO {self.table.name} ({colums_name}) VALUES({query})"
+        return "INSERT INTO `{}` ({}) VALUES({})".format(
+            self.table.name,
+            colums_name,
+            query,
+        )
 
     def __call__(
         self,
@@ -303,7 +307,7 @@ class Delete(TableOperation):
 
     def query(self) -> str:
         """Fetch base delete query."""
-        return f"DELETE FROM {self.table.name} WHERE id=?"  # noqa: S608
+        return f"DELETE FROM `{self.table.name}` WHERE id=?"  # noqa: S608
 
     def _filter(
         self,
@@ -353,7 +357,7 @@ class Update(TableOperation):
 
     def __init__(self, table: Table) -> None:
         super().__init__(table)
-        self.query = f"UPDATE {self.table.name} SET "
+        self.query = f"UPDATE `{self.table.name}` SET "
 
     def __call__(
         self,
@@ -449,7 +453,7 @@ class Query(TableOperation):
             order_by_str = " ORDER BY " + order_by_str
 
         table = self.table.name
-        return "SELECT {} FROM {}{}{}{}{}{}".format(
+        return "SELECT {} FROM `{}`{}{}{}{}{}".format(
             self._body,
             table,
             where_str,
@@ -768,13 +772,23 @@ class CreateTable(Operation):
     def query(
         self,
         table_name: str,
-        columns: str,
-        table_primary_key: str,
-        foreign_keys: str,
+        columns: Sequence[str] | MutableMapping[str, Any],
+        table_primary_key: Sequence[str] | None = None,
+        foreign_keys: Sequence[ForeignKey] | None = None,
         *,
         if_not_exists: bool = True,
     ) -> str:
         """Return SQL command."""
+        columns = self._generate_columns(
+            columns,
+        )
+        table_primary_keys = self._genarate_table_primary_keys(
+            table_primary_key,
+        )
+        foreign_keys = self._genatate_table_foreign_keys(
+            foreign_keys
+        )
+
         query = "CREATE TABLE "
         if if_not_exists:
             query += "IF NOT EXISTS "
@@ -782,7 +796,7 @@ class CreateTable(Operation):
         # if table_primary_key and foreign_keys:
         #     foreign_keys = ", " + foreign_keys
 
-        pr_fr_keys = table_primary_key + foreign_keys
+        pr_fr_keys = table_primary_keys + foreign_keys
 
         return f"{query} `{table_name}` ({columns}{pr_fr_keys})"
 
@@ -861,20 +875,10 @@ class CreateTable(Operation):
             msg = "Incorrect type for columns"
             raise TypeError(msg)
 
-        columns = self._generate_columns(
-            columns,
-        )
-        table_primary_keys = self._genarate_table_primary_keys(
-            table_primary_key,
-        )
-        foreign_keys = self._genatate_table_foreign_keys(
-            foreign_keys
-        )
-
         query = self.query(
             table_name,
             columns,
-            table_primary_keys,
+            table_primary_key,
             foreign_keys,
             if_not_exists=if_not_exists,
         )

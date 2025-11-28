@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import uuid
+from pathlib import Path
 from random import randint
 from typing import Any
 from typing import MutableMapping
@@ -22,8 +23,9 @@ from lildb.sql import func
 @pytest.fixture(scope="package")
 def dbs() -> tuple[DB, ...]:
     """Create db objects."""
-    db_dict = DB("test.db")
-    DB._instances.pop("test.db")
+    test_db_path = DB.normalize_path(Path("test.db"))
+    db_dict = DB(test_db_path)
+    DB._instances.pop(test_db_path)
     db_dict.drop_tables()
     db_dict.create_table("ttable", ["id", "name", "post", "salary"])
     db_cls = DB("test.db", use_datacls=True)
@@ -43,23 +45,29 @@ class TestCreateTable:
         *,
         if_not_exists: bool = True,
     ) -> str:
-        columns = db.create_table._generate_columns(
-            columns,
-        )
-        table_primary_keys = db.create_table._genarate_table_primary_keys(
-            table_primary_key,
-        )
-        foreign_keys = db.create_table._genatate_table_foreign_keys(
-            foreign_keys
-        )
-        query = db.create_table.query(
+        # columns = db.create_table._generate_columns(
+        #     columns,
+        # )
+        # table_primary_keys = db.create_table._genarate_table_primary_keys(
+        #     table_primary_key,
+        # )
+        # foreign_keys = db.create_table._genatate_table_foreign_keys(
+        #     foreign_keys
+        # )
+        # query = db.create_table.query(
+        #     table_name,
+        #     columns,
+        #     table_primary_keys,
+        #     foreign_keys,
+        #     if_not_exists=if_not_exists,
+        # )
+        return db.create_table.query(
             table_name,
             columns,
-            table_primary_keys,
+            table_primary_key,
             foreign_keys,
             if_not_exists=if_not_exists,
-        )
-        return query.replace("  ", " ")
+        ).replace("  ", " ")
 
     def test_simple(self, dbs: tuple[DB, ...]) -> None:
         """
@@ -858,7 +866,7 @@ class TestQuery:
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable WHERE name is NULL"
+            "`ttable`.salary FROM `ttable` WHERE name is NULL"
         )
 
         query = db.ttable.query()
@@ -866,7 +874,7 @@ class TestQuery:
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable WHERE name is NULL AND salary = 10"
+            "`ttable`.salary FROM `ttable` WHERE name is NULL AND salary = 10"
         )
 
         query = db.ttable.query()
@@ -875,7 +883,7 @@ class TestQuery:
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable WHERE name is NULL AND salary = 10 "
+            "`ttable`.salary FROM `ttable` WHERE name is NULL AND salary = 10 "
             "OR salary < 10"
         )
 
@@ -885,7 +893,7 @@ class TestQuery:
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable WHERE salary < 10 OR "
+            "`ttable`.salary FROM `ttable` WHERE salary < 10 OR "
             "name is NULL AND salary = 10"
         )
 
@@ -896,7 +904,7 @@ class TestQuery:
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable WHERE salary < 10 OR "
+            "`ttable`.salary FROM `ttable` WHERE salary < 10 OR "
             "name is NULL AND salary = 10 AND name is not NULL"
         )
 
@@ -907,7 +915,7 @@ class TestQuery:
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable WHERE salary < 10 OR "
+            "`ttable`.salary FROM `ttable` WHERE salary < 10 OR "
             "name is NULL AND salary = 10 AND salary = 100"
         )
 
@@ -919,7 +927,7 @@ class TestQuery:
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable WHERE salary < 10 OR "
+            "`ttable`.salary FROM `ttable` WHERE salary < 10 OR "
             "name is NULL AND salary = 10 AND name is not NULL "
             "AND salary = 100"
         )
@@ -932,7 +940,7 @@ class TestQuery:
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable WHERE salary < 10 OR "
+            "`ttable`.salary FROM `ttable` WHERE salary < 10 OR "
             "name is NULL AND salary = 10 or name is not NULL "
             "AND salary = 100"
         )
@@ -946,7 +954,7 @@ class TestQuery:
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable LIMIT 10"
+            "`ttable`.salary FROM `ttable` LIMIT 10"
         )
 
         query = db.ttable.query()
@@ -954,7 +962,7 @@ class TestQuery:
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable LIMIT 10 OFFSET 10"
+            "`ttable`.salary FROM `ttable` LIMIT 10 OFFSET 10"
         )
 
         query = db.ttable.query()
@@ -962,7 +970,7 @@ class TestQuery:
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable LIMIT 10 OFFSET 10"
+            "`ttable`.salary FROM `ttable` LIMIT 10 OFFSET 10"
         )
 
     def test_order(self, dbs: tuple[DB, ...]) -> None:
@@ -974,7 +982,7 @@ class TestQuery:
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable ORDER BY name"
+            "`ttable`.salary FROM `ttable` ORDER BY name"
         )
 
         query = db.ttable.query()
@@ -982,7 +990,7 @@ class TestQuery:
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable ORDER BY name, post, salary"
+            "`ttable`.salary FROM `ttable` ORDER BY name, post, salary"
         )
 
         query = db.ttable.query()
@@ -990,7 +998,7 @@ class TestQuery:
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable ORDER BY name desc, "
+            "`ttable`.salary FROM `ttable` ORDER BY name desc, "
             "post asc, salary desc"
         )
 
@@ -999,7 +1007,7 @@ class TestQuery:
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable ORDER BY name"
+            "`ttable`.salary FROM `ttable` ORDER BY name"
         )
 
     def test_group(self, dbs: tuple[DB, ...]) -> None:
@@ -1011,7 +1019,7 @@ class TestQuery:
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable GROUP BY name"
+            "`ttable`.salary FROM `ttable` GROUP BY name"
         )
 
         # query = db.ttable.query(func.avg("id * 10"), "name")
@@ -1019,7 +1027,7 @@ class TestQuery:
 
         # assert str(query) == (
         #     "SELECT AVG(id * 10) AS avg, `ttable`.name "
-        #     "FROM ttable GROUP BY name"
+        #     "FROM `ttable` GROUP BY name"
         # )
 
         # query = db.ttable.query(func.avg("id * 10"), "name")
@@ -1027,7 +1035,7 @@ class TestQuery:
 
         # assert str(query) == (
         #     "SELECT AVG(id * 10) AS avg, `ttable`.name "
-        #     "FROM ttable GROUP BY name HAVING avg > 60"
+        #     "FROM `ttable` GROUP BY name HAVING avg > 60"
         # )
 
         # query = db.ttable.query(func.avg("id * 10"), "name")
@@ -1042,7 +1050,7 @@ class TestQuery:
 
         # assert str(query) == (
             # "SELECT AVG(id * 10) AS avg, `ttable`.name "
-            # "FROM ttable GROUP BY name HAVING avg > 60 OR avg = 60"
+            # "FROM `ttable` GROUP BY name HAVING avg > 60 OR avg = 60"
         # )
 
     def test_hard(self, dbs: tuple[DB, ...]) -> None:
@@ -1058,7 +1066,7 @@ class TestQuery:
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable WHERE salary < 10 OR "
+            "`ttable`.salary FROM `ttable` WHERE salary < 10 OR "
             "name is NULL AND salary = 10 or name is not NULL "
             "AND salary = 100 GROUP BY name HAVING name = 'TEST' "
             "ORDER BY name, salary LIMIT 20 OFFSET 10"

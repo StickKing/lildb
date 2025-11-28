@@ -57,6 +57,7 @@ class Table(Generic[TRow]):
         name: str | None = None,
         *,
         use_datacls: bool = False,
+        row_cls: type[TRow] | None = None,
     ) -> None:
         """Initialize."""
         self.name = self.table_name or name
@@ -65,6 +66,9 @@ class Table(Generic[TRow]):
             raise ValueError(msg)
 
         self.use_datacls = use_datacls
+
+        if row_cls:
+            self.row_cls = row_cls
 
         # Operations
         self._query_obj = getattr(self, "query", Query)
@@ -173,4 +177,7 @@ class Table(Generic[TRow]):
         """Prepare table obj."""
         self.db = db
         if self.use_datacls and self.row_cls == RowDict:
-            self.row_cls = make_row_data_cls(self)
+            self.row_cls = make_row_data_cls(
+                self.name,
+                self.column_names,
+            )

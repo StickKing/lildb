@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from typing import Any
 from typing import Callable
 from typing import Iterable
+from typing import Sequence
 from typing import TypeVar
 
 
@@ -69,6 +70,12 @@ class _RowDataClsMixin(ABCRow):
     def not_changed_column_values(self) -> dict[str, Any]:
         """Fetch not changed column name with value like dict."""
         not_change_column = set(self.table.column_names) - self.changed_columns
+        if hasattr(self, "orm_obj"):
+            return {
+                name: getattr(self, f"_column_data_{name}_")
+                for name in self.table.column_names
+                if name in not_change_column
+            }
         return {
             name: getattr(self, name)
             for name in self.table.column_names
@@ -78,6 +85,12 @@ class _RowDataClsMixin(ABCRow):
     @property
     def changed_column_values(self) -> dict[str, Any]:
         """Fetch changed column name with value like dict."""
+        if hasattr(self, "orm_obj"):
+            return {
+                name: getattr(self, f"_column_data_{name}_")
+                for name in self.table.column_names
+                if name in self.changed_columns
+            }
         return {
             name: getattr(self, name)
             for name in self.table.column_names
@@ -89,7 +102,8 @@ class _RowDataClsMixin(ABCRow):
         if (
             hasattr(self, "changed_columns") and
             self.changed_columns is not None and
-            self.table is not None
+            self.table is not None and
+            name.startswith("_") is False
         ):
             old_value = getattr(self, name)
             super().__setattr__(name, value)
@@ -145,21 +159,34 @@ class RowDict(ABCRow, dict):
         super().__setitem__(key, value)
 
 
-def make_row_data_cls(table: Table) -> type:
+def make_row_data_cls(
+    table_name: str,
+    column_names: Sequence[str],
+    bases: Sequence[type[Any]] | None = None,
+    *,
+    default_none: bool = True,
+) -> type[Any]:
     """Create data cls row for the transmitted table."""
+    if bases is None:
+        bases = []
+
     attributes: list[tuple[str, Any, field]] = [
         (atr, Any, field(default=None))
-        for atr in [*table.column_names, "table"]
+        if default_none
+        else
+        (atr, Any)
+        for atr in column_names
     ]
-    attributes.append(
-        ("changed_columns", set, field(default_factory=lambda: set()))
-    )
+    attributes.extend([
+        ("changed_columns", set, field(default_factory=lambda: set())),
+        ("table", Any, field(default=None))
+    ])
 
     return make_dataclass(
-        f"Row{table.name.title()}DataClass",
+        f"Row{table_name}DataClass",
         attributes,
         repr=False,
-        bases=(_RowDataClsMixin,),
+        bases=(*bases, _RowDataClsMixin),
     )
 
     # data_cls.__repr__ = repr

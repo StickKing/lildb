@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from collections import defaultdict
 from functools import cached_property
 from functools import singledispatchmethod
 from pathlib import Path
@@ -13,14 +14,22 @@ from typing import TYPE_CHECKING
 from typing import Any
 from typing import Callable
 from typing import ClassVar
-from typing import Final
 from typing import Iterator
 from typing import MutableMapping
 from typing import Sequence
 
+from typing_extensions import TypeAlias
+
 from .enumcls import ResultFetch
 from .operations import CreateTable
+from .orm.utils import create_table_and_data_cls_row
 from .table.table import Table
+
+
+if TYPE_CHECKING:
+    from .orm import TModelClass
+    from .orm.utils import TableData
+    TRegistredTables: TypeAlias = defaultdict[Any, list[TableData]]
 
 
 __all__ = (
@@ -32,9 +41,11 @@ __all__ = (
 class DB:
     """DB component."""
 
-    custom_tables: ClassVar[list[Table]]
-
-    _instances: Final[dict[str, DB]] = {}
+    _instances: ClassVar[dict[str, DB]] = {}
+    _registered_tables_data: ClassVar[TRegistredTables] = defaultdict(
+        list,
+    )
+    orm_classes: ClassVar[dict[str, type[Any]]] = {}
 
     def __new__(cls: type[DB], *args: Any, **kwargs: Any) -> DB:
         """Use singleton template. Check path and match paths."""
@@ -45,13 +56,15 @@ class DB:
         path = kwargs["path"] if kwargs.get("path") else args[0]
         normalized_path = cls.normalize_path(Path(path))
 
-        for inst_path, instance in cls._instances.items():
-            if cls.normalize_path(Path(inst_path)) == normalized_path:
-                return instance
+        # for inst_path, instance in cls._instances.items():
+        #     if inst_path == normalized_path:
+        #         return instance
+        if normalized_path in cls._instances:
+            return cls._instances[normalized_path]
 
         new_instance = super().__new__(cls)
-        cls._instances[path] = new_instance
-        return cls._instances[path]
+        cls._instances[normalized_path] = new_instance
+        return cls._instances[normalized_path]
 
     @classmethod
     def normalize_path(cls: type[DB], path: Path) -> Path:
@@ -64,21 +77,25 @@ class DB:
         *,
         use_datacls: bool = False,
         debug: bool = False,
+        auto_create_registred_tables: bool = True,
         **connect_params: Any,
     ) -> None:
         """Initialize DB create connection and cursor."""
         if debug:
             logging.basicConfig(level=logging.DEBUG)
-        self.path = path
+        self.path = self.normalize_path(Path(path))
         self.connect: sqlite3.Connection = sqlite3.connect(
-            path,
+            self.path,
             **connect_params,
         )
         self.use_datacls = use_datacls
         self.table_names: set = set()
-        self.initialize_tables()
-
         self.create_table = getattr(self, "create_table", CreateTable)(self)
+
+        if auto_create_registred_tables:
+            self.create_registred_table()
+
+        self.initialize_tables()
 
     def initialize_tables(self) -> None:
         """Initialize all db tables."""
@@ -90,6 +107,7 @@ class DB:
 
         custom_table_names = set()
 
+        # table like class attributes
         for attr in filter(
             lambda i: not i.startswith("_"),
             dir(self.__class__),
@@ -100,6 +118,7 @@ class DB:
             custom_table_names.add(custom_table.name.lower())
             custom_table(self)
 
+        # auto create exists table
         for name in result:
             table_name = name[0].lower()
             self.table_names.add(table_name)
@@ -115,6 +134,7 @@ class DB:
                 new_table,
             )
             self.table_names.add(table_name)
+
         if hasattr(self, "tables"):
             del self.tables
 
@@ -161,7 +181,8 @@ class DB:
         """
         command = query.partition(" ")[0].lower()
         cursor = self.connect.cursor()
-        logging.info(query)
+        logging.info("Query: %s", query)
+        logging.info("Parameters: %s", parameters)
         if many:
             cursor.executemany(query, parameters)
         else:
@@ -201,6 +222,61 @@ class DB:
         def __getattr__(self, name: str) -> Table:
             """Typing for runtime created table."""
             ...
+
+    def create_registred_table(self) -> None:
+        """Create registred table."""
+        cls = self.__class__
+        cursor = self.connect.cursor()
+
+        for path, tables in self._registered_tables_data.items():
+            for table_info in tables:
+                if path is None or path == self.path:
+
+                    table_data, row_cls = table_info
+                    table_name: str = table_data["table_name"]
+
+                    create_table_query = self.create_table.query(**table_data)
+                    logging.info("Query: %s", create_table_query)
+                    cursor.execute(create_table_query)
+
+                    table_obj = Table(
+                        table_name,
+                        use_datacls=True,
+                        row_cls=row_cls,
+                    )
+                    setattr(cls, table_name.lower(), table_obj)
+
+        self.connect.commit()
+
+    @classmethod
+    def register_table(
+        cls,
+        model_cls: type[Any] = None,
+        *,
+        path: str | Path | None = None,
+    ) -> type[Any] | Callable[[type[Any]], type[Any]]:
+        """Registrate table.
+
+        Args:
+            path (str | Path | None): path to datebase file
+        """
+        def wrap(model_cls: TModelClass) -> TModelClass:
+            """Wrap func."""
+            table_data_row_cls = create_table_and_data_cls_row(model_cls)
+            correct_path = cls.normalize_path(Path(path))
+            cls._registered_tables_data[correct_path].append(
+                table_data_row_cls,
+            )
+            cls.orm_classes[table_data_row_cls[0]["table_name"]] = model_cls
+            return model_cls
+
+        if model_cls is None and path is not None:
+            return wrap
+
+        table_data_row_cls = create_table_and_data_cls_row(model_cls)
+        cls._registered_tables_data[path].append(table_data_row_cls)
+        cls.orm_classes[table_data_row_cls[0]["table_name"]] = model_cls
+        return model_cls
 
 
 class Future:
@@ -301,7 +377,5 @@ class ThreadDB(DB):
         super().close()
 
 
-
 if __name__ == "__main__":
     db = DB("local")
-

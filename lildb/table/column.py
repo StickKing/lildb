@@ -56,19 +56,19 @@ class Column:
     """Column."""
 
     __slots__ = (
-        "_table",
+        "_table_name",
         "_column_name",
         "_full_column_name",
         "complete_label",
     )
 
-    def __init__(self, table: Table, column_name: str) -> None:
+    def __init__(self, table_name: str, column_name: str) -> None:
         """Initialize."""
-        self._table = table
+        self._table_name = table_name
         self._column_name = column_name
         self.complete_label = column_name
         self._full_column_name = "`{}`.{}".format(
-            self._table.name,
+            self._table_name,
             self._column_name,
         )
 
@@ -224,4 +224,4 @@ class Columns:
                 name,
             )
             raise AttributeError(msg)
-        return Column(self._table, name)
+        return Column(self._table.name, name)
