@@ -2,17 +2,24 @@
 from __future__ import annotations
 
 import json
-from collections import Hashable
-from collections import UserString
+from abc import abstractmethod
 from datetime import date
 from datetime import datetime
 from datetime import time
 from enum import Enum
+from functools import singledispatchmethod
 from numbers import Number
 from typing import Any
+from typing import Callable
+from typing import Hashable
 from typing import Literal
 from typing import Protocol
+from typing import TypedDict
 from typing import TypeVar
+
+from typing_extensions import NotRequired
+from typing_extensions import TypeAlias
+from typing_extensions import Unpack
 
 from .enumcls import DeleteAction
 from .enumcls import UpdateAction
@@ -25,27 +32,46 @@ __all__ = (
     "Text",
     "Blob",
     "ForeignKey",
+    "Json",
+    "DateTime",
+    "Date",
+    "Time",
+    "EnumName",
+    "EnumValue",
+    "EnumHide",
 )
 
 
 TColumnType = TypeVar("TColumnType", bound="BaseType")
 TNumberType = TypeVar("TNumberType", bound="Number")
-TDateTimeDBFormat = Literal["timestamp", "ISO"]
-TDateDBFormat = Literal["timestamp", "ISO", "ordinal"]
+TDateTimeDBFormat: TypeAlias = Literal["timestamp", "ISO"]
+TDateDBFormat: TypeAlias = Literal["timestamp", "ISO", "ordinal"]
+
+
+class TBaseTypeKwargs(TypedDict):
+    """Base type kwargs."""
+
+    primary_key: NotRequired[bool]
+    unique: NotRequired[bool]
+    nullable: NotRequired[bool]
 
 
 class ORMColumnProtocol(Protocol):
     """ORM column serializers."""
 
-    def to_db(self, value: Any | None) -> Any:
+    __slots__ = ()
+
+    def to_db(self, value: Any) -> Any:
         ...
 
-    def to_python(self, value: Any | None) -> Any:
+    def to_python(self, value: Any) -> Any:
         ...
 
 
-class BaseORMColumnVixin(ORMColumnProtocol):
+class BaseORMColumnVixin:
     """Base serializers methods."""
+
+    __slots__ = ()
 
     def to_db(self, value: Any) -> Any:
         """Serialize python obj to db data."""
@@ -53,20 +79,47 @@ class BaseORMColumnVixin(ORMColumnProtocol):
             return None
         return value
 
-    def to_python(self, value: Any) -> Any:
+    @singledispatchmethod
+    def to_python(self, value) -> Any:
         """Serialize db data to python obj."""
-        if value is None:
-            return None
-        return value
 
 
-class BaseType(UserString, ORMColumnProtocol):
+
+class ColumnString:
+    """Columns string."""
+
+    __slots__ = ("data",)
+
+    def __init__(self, seq: str) -> None:
+        self.data = seq
+
+    def __repr__(self) -> str: return repr(self.data)
+    def __int__(self) -> int: return int(self.data)
+    def __float__(self) -> float: return float(self.data)
+    def __complex__(self) -> complex: return complex(self.data)
+    def __hash__(self) -> int: return hash(self.data)
+    def __len__(self) -> int: return len(self.data)
+
+    @abstractmethod
+    def __str__(self) -> str:
+        """String view."""
+        ...
+
+
+class BaseType(ColumnString, ORMColumnProtocol):
     """Base column type."""
+
+    __slots__ = (
+        "default",
+        "primary_key",
+        "unique",
+        "nullable",
+    )
 
     def __init__(
         self,
         str_type: str,
-        default: TNumberType | str | bytes | None = None,
+        default: Any | None = None,
         *,
         primary_key: bool = False,
         unique: bool = False,
@@ -106,14 +159,14 @@ class BaseType(UserString, ORMColumnProtocol):
 class Integer(BaseType, BaseORMColumnVixin):
     """Integer type."""
 
+    __slots__ = ("autoincrement",)
+
     def __init__(
         self,
         default: int | None = None,
         *,
-        primary_key: bool = False,
-        unique: bool = False,
-        nullable: bool = True,
         autoincrement: bool = False,
+        **kwargs: Unpack[TBaseTypeKwargs],
     ) -> None:
         """Initialize base params for INTEGER.
 
@@ -133,9 +186,7 @@ class Integer(BaseType, BaseORMColumnVixin):
         super().__init__(
             "INTEGER",
             default=default,
-            primary_key=primary_key,
-            unique=unique,
-            nullable=nullable,
+            **kwargs,
         )
 
     def __str__(self) -> str:
@@ -155,10 +206,7 @@ class Real(BaseType, BaseORMColumnVixin):
     def __init__(
         self,
         default: TNumberType | None = None,
-        *,
-        primary_key: bool = False,
-        unique: bool = False,
-        nullable: bool = True,
+        **kwargs: Unpack[TBaseTypeKwargs],
     ) -> None:
         """Initialize base params for REAL.
 
@@ -177,9 +225,7 @@ class Real(BaseType, BaseORMColumnVixin):
         super().__init__(
             "REAL",
             default=default,
-            primary_key=primary_key,
-            unique=unique,
-            nullable=nullable,
+            **kwargs,
         )
 
 
@@ -189,10 +235,7 @@ class Text(BaseType, BaseORMColumnVixin):
     def __init__(
         self,
         default: str | None = None,
-        *,
-        primary_key: bool = False,
-        unique: bool = False,
-        nullable: bool = True,
+        **kwargs: Unpack[TBaseTypeKwargs],
     ) -> None:
         """Initialize base params for TEXT.
 
@@ -211,9 +254,7 @@ class Text(BaseType, BaseORMColumnVixin):
         super().__init__(
             "TEXT",
             default=default,
-            primary_key=primary_key,
-            unique=unique,
-            nullable=nullable,
+            **kwargs,
         )
 
 
@@ -222,10 +263,7 @@ class Blob(BaseType, BaseORMColumnVixin):
 
     def __init__(
         self,
-        *,
-        primary_key: bool = False,
-        unique: bool = False,
-        nullable: bool = True,
+        **kwargs: Unpack[TBaseTypeKwargs],
     ) -> None:
         """Initialize base params for BLOB.
 
@@ -239,14 +277,20 @@ class Blob(BaseType, BaseORMColumnVixin):
         """
         super().__init__(
             "BLOB",
-            primary_key=primary_key,
-            unique=unique,
-            nullable=nullable,
+            **kwargs,
         )
 
 
-class ForeignKey(UserString):
+class ForeignKey(BaseType):
     """Foreign key constraint."""
+
+    __slots__ = (
+        "column",
+        "second_table",
+        "reference_column",
+        "on_delete",
+        "on_update",
+    )
 
     def __init__(
         self,
@@ -277,25 +321,29 @@ class ForeignKey(UserString):
             stmt += f" ON UPDATE {self.on_update.value}"
         return stmt
 
+    def __str__(self) -> str:
+        return self()
+
 
 class Json(Text, ORMColumnProtocol):
     """TEXT column type with dict conversion."""
+
+    __slots__ = (
+        "_json_module",
+        "_factory_cls",
+    )
 
     def __init__(
         self,
         default: str | None = None,
         *,
-        primary_key: bool = False,
-        unique: bool = False,
-        nullable: bool = True,
         json_module: Any = json,
         factory_cls: type[Any] | None = None,
+        **kwargs: Unpack[TBaseTypeKwargs],
     ) -> None:
         super().__init__(
             default,
-            primary_key=primary_key,
-            unique=unique,
-            nullable=nullable,
+            **kwargs,
         )
         self._json_module = json_module
         self._factory_cls = factory_cls
@@ -320,20 +368,18 @@ class Json(Text, ORMColumnProtocol):
 class DateTime(Text, ORMColumnProtocol):
     """TEXT or REAL column type with dict conversion."""
 
+    __slots__ = ("_datetime_db_format",)
+
     def __init__(
         self,
         default: str | None = None,
         *,
-        primary_key: bool = False,
-        unique: bool = False,
-        nullable: bool = True,
         datetime_db_format: TDateTimeDBFormat = "ISO",
+        **kwargs: Unpack[TBaseTypeKwargs],
     ) -> None:
         super().__init__(
             default,
-            primary_key=primary_key,
-            unique=unique,
-            nullable=nullable,
+            **kwargs,
         )
         self._datetime_db_format = datetime_db_format
         if datetime_db_format == "timestamp":
@@ -351,50 +397,56 @@ class DateTime(Text, ORMColumnProtocol):
         if isinstance(value, (float, str)):
             return value
 
-        serialize_func = {
+        serialize_func: Callable[[], str | float | Any] | None = {
             "timestamp": value.timestamp,
             "ISO": value.isoformat,
         }.get(self._datetime_db_format, None)
 
-        if serialize_func:
-            return serialize_func()
-        return None
+        if serialize_func is None:
+            return None
+
+        return serialize_func()
 
     def to_python(
         self,
         value: str | float | None,
-    ) -> datetime:
+    ) -> datetime | None:
         """Serialize db data to python obj."""
         if value is None:
             return None
 
-        serialize_func = {
+        serialize_func: Callable[[str | float], datetime] | None = {
             "timestamp": datetime.fromtimestamp,
             "ISO": datetime.fromisoformat,
         }.get(self._datetime_db_format)
 
+        if serialize_func is None:
+            return None
+
         return serialize_func(value)
 
 
-class Date(Text, ORMColumnProtocol):
+class Date(Text):
     """TEXT or REAL or INTEGER column type with dict conversion."""
+
+    __slots__ = ("_date_db_format",)
 
     def __init__(
         self,
         default: str | None = None,
         *,
-        primary_key: bool = False,
-        unique: bool = False,
-        nullable: bool = True,
         date_db_format: TDateDBFormat = "ISO",
+        **kwargs: Unpack[TBaseTypeKwargs],
     ) -> None:
         super().__init__(
             default,
-            primary_key=primary_key,
-            unique=unique,
-            nullable=nullable,
+            **kwargs,
         )
-        self._datetime_db_format = date_db_format
+        self._date_db_format = date_db_format
+
+        if date_db_format not in {"timestamp", "ISO", "ordinal"}:
+            msg = "Unknown name for date_db_format"
+            raise ValueError(msg)
 
         if date_db_format == "timestamp":
             self.data = "REAL"
@@ -419,38 +471,81 @@ class Date(Text, ORMColumnProtocol):
                 "timestamp": value.timestamp,
                 "ISO": value.date().isoformat,
                 "ordinal": value.toordinal,
-            }.get(self._datetime_db_format, None)
+            }.get(self._date_db_format, None)
         else:
             value_datetime = datetime.combine(value, datetime.min.time())
             serialize_func = {
                 "timestamp": value_datetime.timestamp,
                 "ISO": value.isoformat,
                 "ordinal": value.toordinal,
-            }.get(self._datetime_db_format, None)
+            }.get(self._date_db_format, None)
 
-        if serialize_func:
-            return serialize_func()
-        return None
+        if serialize_func is None:
+            return None
 
-    def to_python(
-        self,
-        value: str | float | None,
-    ) -> date:
+        return serialize_func()
+
+    @singledispatchmethod
+    def to_python(self, value) -> Any:
         """Serialize db data to python obj."""
-        if not value:
-            return value
+        msg = "Unknown type"
+        raise TypeError(msg)
 
-        serialize_func = {
-            "timestamp": datetime.fromtimestamp,
-            "ISO": datetime.fromisoformat,
-            "ordinal": datetime.fromordinal,
-        }.get(self._datetime_db_format)
+    @to_python.register
+    def _(self, value: None) -> None:
+        """Serialize db data to python obj."""
+        return value
 
-        return serialize_func(value).date()
+    @to_python.register
+    def _(self, value: float) -> date:
+        """Serialize db data to python obj."""
+        if self._date_db_format != "timestamp":
+            msg = "Unknown type"
+            raise TypeError(msg)
+        return datetime.fromtimestamp(value).date()
+
+    @to_python.register
+    def _(self, value: str) -> date:
+        """Serialize db data to python obj."""
+        if self._date_db_format != "ISO":
+            msg = "Unknown type"
+            raise TypeError(msg)
+
+        return datetime.fromisoformat(value).date()
+
+    @to_python.register
+    def _(self, value: int) -> date:
+        """Serialize db data to python obj."""
+        if self._date_db_format != "ordinal":
+            msg = "Unknown type"
+            raise TypeError(msg)
+
+        return datetime.fromordinal(value).date()
+
+    # def to_python(
+    #     self,
+    #     value: str | float | None,
+    # ) -> date | None:
+    #     """Serialize db data to python obj."""
+    #     if value is None:
+    #         return value
+
+    #     serialize_func = {
+    #         "timestamp": datetime.fromtimestamp,
+    #         "ISO": datetime.fromisoformat,
+    #         "ordinal": datetime.fromordinal,
+    #     }.get(self._date_db_format)
+
+    #     if serialize_func is None:
+    #         return None
+
+    #     return serialize_func(value).date()
 
 
 class Time(Text, ORMColumnProtocol):
     """TEXT column type with dict conversion."""
+
+    __slots__ = ()
 
     def to_db(
         self,
@@ -468,7 +563,7 @@ class Time(Text, ORMColumnProtocol):
     def to_python(
         self,
         value: str | None,
-    ) -> time:
+    ) -> time | None:
         """Serialize db data to python obj."""
         if value is None:
             return None
@@ -479,36 +574,41 @@ class Time(Text, ORMColumnProtocol):
 class EnumName(Text):
     """"TEXT type that stores the name from an Enum object."""
 
+    __slots__ = (
+        "_enum_cls",
+        "_enum_names",
+    )
+
     def __init__(
         self,
         enum_cls: type[Enum],
         *,
-        default=None,
-        primary_key=False,
-        unique=False,
-        nullable=True,
+        default: str | None = None,
+        **kwargs: Unpack[TBaseTypeKwargs],
     ) -> None:
         super().__init__(
             default,
-            primary_key=primary_key,
-            unique=unique,
-            nullable=nullable,
+            **kwargs,
         )
         self._enum_cls = enum_cls
         self._enum_names = {item.name for item in enum_cls}
 
-    def to_db(self, value: Any | str | None) -> str:
+    def to_db(self, value: Any | str | None) -> str | Hashable | None:
         """Serialize to db type."""
         if value is None:
             return None
 
-        if isinstance(value, Hashable) and value in self._enum_names:
-            return value
+        if isinstance(value, Hashable):
+            if value in self._enum_names:
+                return value
 
-        if isinstance(value, str):
-            return self._enum_cls(value).name
+            msg = "Unknown type"
+            raise TypeError(msg)
 
-        return value.name
+        if isinstance(value, Enum):
+            return value.name
+
+        return self._enum_cls(value).name
 
     def to_python(self, value: str | None) -> Any:
         """Serialize to python obj."""
@@ -520,35 +620,41 @@ class EnumName(Text):
 class EnumValue(Text):
     """"TEXT type that stores the value from an Enum object."""
 
+    __slots__ = (
+        "_enum_cls",
+        "_enum_values",
+    )
+
     def __init__(
         self,
         enum_cls: type[Enum],
         *,
-        default=None,
-        primary_key=False,
-        unique=False,
-        nullable=True,
+        default: Any = None,
+        **kwargs: Unpack[TBaseTypeKwargs],
     ) -> None:
         super().__init__(
             default,
-            primary_key=primary_key,
-            unique=unique,
-            nullable=nullable,
+            **kwargs,
         )
         self._enum_cls = enum_cls
         self._enum_values = {item.value for item in enum_cls}
 
-    def to_db(self, value: str | None) -> Any:
+    def to_db(self, value: type[Enum] | Hashable | None) -> Any:
         """Serialize to python obj."""
         if value is None:
             return None
 
-        if value in self._enum_values:
-            return value
+        # __init__ dataclass
+        if isinstance(value, Hashable):
+            if value in self._enum_values:
+                return value
+
+            msg = "Unknown type"
+            raise TypeError(msg)
 
         return value.value
 
-    def to_python(self, value: Any) -> str:
+    def to_python(self, value: Any) -> Enum | None:
         """Serialize to db type."""
         if value is None:
             return None
@@ -562,36 +668,41 @@ class EnumHide(Text):
     And return only value without enum obj.
     """
 
+    __slots__ = (
+        "_enum_cls",
+        "_enum_names",
+    )
+
     def __init__(
         self,
         enum_cls: type[Enum],
         *,
-        default=None,
-        primary_key=False,
-        unique=False,
-        nullable=True,
+        default: str | None = None,
+        **kwargs: Unpack[TBaseTypeKwargs],
     ) -> None:
         super().__init__(
             default,
-            primary_key=primary_key,
-            unique=unique,
-            nullable=nullable,
+            **kwargs,
         )
         self._enum_cls = enum_cls
         self._enum_names = {item.name for item in enum_cls}
 
-    def to_db(self, value: Any | str | None) -> str:
+    def to_db(
+        self,
+        value: type[Enum] | Hashable | None,
+    ) -> str | Hashable | None:
         """Serialize to db type."""
         if value is None:
             return None
 
+        # __init__ dataclass
         if isinstance(value, Hashable) and value in self._enum_names:
             return value
 
-        if isinstance(value, str):
-            return self._enum_cls(value).name
+        if isinstance(value, Enum):
+            return value.name
 
-        return value.name
+        return self._enum_cls(value).name
 
     def to_python(self, value: str | None) -> Any:
         """Serialize to python obj."""

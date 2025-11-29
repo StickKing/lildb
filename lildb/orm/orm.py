@@ -7,10 +7,14 @@ from typing import Generic
 from typing import TypeVar
 from typing import overload
 
+from lildb.rows import ABCRow
+
+from ..column_types import Date
 from ..column_types import DateTime
 from ..column_types import ForeignKey
 from ..column_types import Json
 from ..column_types import TColumnType
+from ..column_types import Time
 from ..rows import _RowDataClsMixin
 from ..table.column import Column
 
@@ -89,6 +93,8 @@ class MColumn(TypedColumn[TAnyType]):
     _cached_types = {
         Json,
         DateTime,
+        Date,
+        Time,
     }
 
     def __init__(self, column_type: TColumnType) -> None:
@@ -137,19 +143,20 @@ class MColumn(TypedColumn[TAnyType]):
 class RelationForeignKey(ForeignKey, TypedColumn, DBTableGetterMixin):
     """Relation foreign key."""
 
+    __slots__ = ()
+
     def __get__(
         self,
         instance: ABCRow | None,
         owner: type[Any],
     ) -> TAnyType:
-        """Get relation object from db."""
+        """Returns a relation object by foreign key."""
         if instance is None:
             msg = "Instance not found"
             raise AttributeError(msg)
 
         db = self._get_db(instance)
-
-        table = self._get_table(db)
+        table = self._get_table_by_name(db, self.second_table)
 
         ref_column = getattr(table.c, self.reference_column.lower(), None)
 
@@ -184,7 +191,10 @@ class RelationForeignKey(ForeignKey, TypedColumn, DBTableGetterMixin):
 
 
 class Relation(TypedColumn, DBTableGetterMixin):
-    """Relation one many or many to many."""
+    """
+    Relation is a descriptor for dealing
+    with one-to-many or many-to-many relationships.
+    """
 
     __slots__ = (
         "second_table",
@@ -203,7 +213,7 @@ class Relation(TypedColumn, DBTableGetterMixin):
         self._foreign_key_to_current_table = foreign_key_to_current_table
         self._foreign_key_to_relation_table = foreign_key_to_relation_table
 
-    def _one_many(self, instance: ABCRow):
+    def _one_many(self, instance: ABCRow) -> list[ABCRow]:
         """One many."""
         db = self._get_db(instance)
         second_table = self._get_table(db)
@@ -227,7 +237,7 @@ class Relation(TypedColumn, DBTableGetterMixin):
             foreign_key_column == instance_ref_column_value,
         ).all()
 
-    def _many_to_many(self, instance: ABCRow):
+    def _many_to_many(self, instance: ABCRow) -> list[ABCRow]:
         """Many to many."""
         db = self._get_db(instance)
 
@@ -288,7 +298,7 @@ class Relation(TypedColumn, DBTableGetterMixin):
         instance: ABCRow | None,
         owner: type[Any],
     ) -> list[TAnyType]:
-        """."""
+        """Returns a relation objects by foreign keys."""
         if instance is None:
             msg = "Instance not found"
             raise AttributeError(msg)
