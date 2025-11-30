@@ -189,7 +189,7 @@ class Integer(BaseType):
         return self.data
 
     @singledispatchmethod
-    def to_db(self, value) -> Any:
+    def to_db(self, value: Any) -> Any:
         """Serialize python obj to db data."""
         msg = "Unknown type value can be only number"
         raise TypeError(msg)
@@ -225,7 +225,7 @@ class Integer(BaseType):
         return int(value)
 
     @singledispatchmethod
-    def to_python(self, value) -> Any:
+    def to_python(self, value: Any) -> Any:
         """Serialize db data to python obj."""
         msg = "Unknown type"
         raise TypeError(msg)
@@ -272,7 +272,7 @@ class Real(BaseType):
         )
 
     @singledispatchmethod
-    def to_db(self, value) -> Any:
+    def to_db(self, value: Any) -> Any:
         """Serialize python obj to db data."""
         msg = "Unknown type, value can be only number"
         raise TypeError(msg)
@@ -303,7 +303,7 @@ class Real(BaseType):
         return value
 
     @singledispatchmethod
-    def to_python(self, value) -> Any:
+    def to_python(self, value: Any) -> Any:
         """Serialize db data to python obj."""
         msg = "Unknown type, value can be only number"
         raise TypeError(msg)
@@ -355,7 +355,7 @@ class Text(BaseType):
         )
 
     @singledispatchmethod
-    def to_db(self, value) -> Any:
+    def to_db(self, value: Any) -> Any:
         """Serialize python obj to db data."""
         msg = "Unknown type, value can be only str"
         raise TypeError(msg)
@@ -371,7 +371,7 @@ class Text(BaseType):
         return value
 
     @singledispatchmethod
-    def to_python(self, value) -> Any:
+    def to_python(self, value: Any) -> Any:
         """Serialize db data to python obj."""
         msg = "Unknown type, can be only str"
         raise TypeError(msg)
@@ -575,14 +575,16 @@ class DataClassJson(BaseType):
         self._json_module = json_module
 
     @singledispatchmethod
-    def to_db(self, value: Any) -> Any:
+    def to_db(self, value: Any) -> str:
         """Serialize python obj to db data."""
         if is_dataclass(value):
-            return self._json_module.dumps(asdict(value))
+            return self._json_module.dumps(
+                asdict(value),  # type: ignore[arg-type]
+            )
         msg = "Unknown type"
         raise TypeError(msg)
 
-    @to_db.register
+    @to_db.register  # type: ignore[arg-type]
     def _(self, value: None) -> None:
         """Serialize python obj to db data."""
         return value
@@ -702,7 +704,7 @@ class DateTime(BaseType):
         return value
 
     @to_python.register
-    def _(self, value: str) -> str:
+    def _(self, value: str) -> datetime:
         """Serialize db data to python obj."""
         if self._datetime_db_format != "ISO":
             msg = "Unknown type"
@@ -711,7 +713,7 @@ class DateTime(BaseType):
         return datetime.fromisoformat(value)
 
     @to_python.register
-    def _(self, value: float) -> float:
+    def _(self, value: float) -> datetime:
         """Serialize db data to python obj."""
         if self._datetime_db_format != "timestamp":
             msg = "Unknown type"
