@@ -6,6 +6,7 @@ from abc import ABC
 from abc import abstractmethod
 from dataclasses import _process_class  # type: ignore
 from dataclasses import field
+from dataclasses import fields
 from dataclasses import make_dataclass
 from typing import TYPE_CHECKING
 from typing import Any
@@ -63,39 +64,20 @@ class ABCRow(ABC):
         self.changed_columns = set()
 
 
-class _RowDataClsMixin(ABCRow):
+class _BaseRowDataClsMixin(ABCRow):
     """Mixin for realize change control in row."""
 
-    @property
-    def not_changed_column_values(self) -> dict[str, Any]:
-        """Fetch not changed column name with value like dict."""
-        not_change_column = set(self.table.column_names) - self.changed_columns
-        if hasattr(self, "orm_obj"):
-            return {
-                name: getattr(self, f"_column_data_{name}_")
-                for name in self.table.column_names
-                if name in not_change_column
-            }
-        return {
-            name: getattr(self, name)
-            for name in self.table.column_names
-            if name in not_change_column
-        }
+    def __repr__(self: Any) -> str:
+        """View string by obj."""
+        columns = ", ".join(
+            f"{atr_name}={getattr(self, atr_name)}"
+            for atr_name in self.table.column_names
+        )
+        return f"{self.__class__.__name__}({columns})"
 
-    @property
-    def changed_column_values(self) -> dict[str, Any]:
-        """Fetch changed column name with value like dict."""
-        if hasattr(self, "orm_obj"):
-            return {
-                name: getattr(self, f"_column_data_{name}_")
-                for name in self.table.column_names
-                if name in self.changed_columns
-            }
-        return {
-            name: getattr(self, name)
-            for name in self.table.column_names
-            if name in self.changed_columns
-        }
+
+class _RowDataClsMixin(_BaseRowDataClsMixin):
+    """Row data cls mixin."""
 
     def __setattr__(self, name: str, value: Any) -> None:
         """Check changed attribute for updating and deleting row."""
@@ -112,13 +94,96 @@ class _RowDataClsMixin(ABCRow):
             return
         super().__setattr__(name, value)
 
-    def __repr__(self: Any) -> str:
-        """View string by obj."""
-        columns = ", ".join(
-            f"{atr_name}={getattr(self, atr_name)}"
-            for atr_name in self.table.column_names
-        )
-        return f"{self.__class__.__name__}({columns})"
+    @property
+    def not_changed_column_values(self) -> dict[str, Any]:
+        """Fetch not changed column name with value like dict."""
+        not_change_column = set(self.table.column_names) - self.changed_columns
+        return {
+            name: getattr(self, name)
+            for name in self.table.column_names
+            if name in not_change_column
+        }
+
+    @property
+    def changed_column_values(self) -> dict[str, Any]:
+        """Fetch changed column name with value like dict."""
+        return {
+            name: getattr(self, name)
+            for name in self.table.column_names
+            if name in self.changed_columns
+        }
+
+
+class _RowORMModelMixin(_BaseRowDataClsMixin):
+    """ORM row mixin."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        """Initialize orm object."""
+        super().__setattr__("_is_init", True)
+
+        self.table = kwargs.pop("table", None)
+        self.changed_columns = set()
+
+        row_fields = {
+            field.name
+            for field in fields(self)
+        }
+
+        for key, value in kwargs.items():
+            if key not in row_fields:
+                continue
+            setattr(self, key, value)
+            row_fields.remove(key)
+
+        for name in row_fields:
+            object.__setattr__(self, f"_column_data_{name}_", None)
+
+        self._is_init = False
+
+    def get_row_data_as_dict(self) -> dict:
+        """Return row data like dict."""
+        return {
+            name: getattr(self, f"_column_data_{name}_")
+            for name in self.table.column_names
+        }
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Check changed attribute for updating and deleting row."""
+        if self._is_init:
+            super().__setattr__(name, value)
+            return
+
+        if (
+            hasattr(self, "changed_columns") and
+            self.changed_columns is not None and
+            self.table is not None and
+            name.startswith("_") is False
+        ):
+            old_value = getattr(self, name)
+            super().__setattr__(name, value)
+            if value != old_value:
+                self.changed_columns.add(name)
+            return
+        super().__setattr__(name, value)
+
+    @property
+    def not_changed_column_values(self) -> dict[str, Any]:
+        """Fetch not changed column name with value like dict."""
+        not_change_column = set(self.table.column_names) - self.changed_columns
+        return {
+            name: getattr(self, f"_column_data_{name}_")
+            for name in self.table.column_names
+            if name in not_change_column
+        }
+
+    @property
+    def changed_column_values(self) -> dict[str, Any]:
+        """Fetch changed column name with value like dict."""
+        return {
+            name: getattr(self, f"_column_data_{name}_")
+            for name in self.table.column_names
+            if name in self.changed_columns
+        }
 
 
 class RowDict(ABCRow, dict):
@@ -165,28 +230,46 @@ def make_row_data_cls(
     bases: Sequence[type[Any]] | None = None,
     *,
     default_none: bool = True,
+    create_orm_model: bool = False,
 ) -> type[Any]:
     """Create data cls row for the transmitted table."""
-    if bases is None:
-        bases = []
+    attributes = []
+    init = True
 
-    attributes: list[tuple[str, Any, field]] = [
-        (atr, Any, field(default=None))
-        if default_none
-        else
-        (atr, Any)
-        for atr in column_names
-    ]
-    attributes.extend([
-        ("changed_columns", set, field(default_factory=lambda: set())),
-        ("table", Any, field(default=None))
-    ])
+    if bases is None:
+        if create_orm_model is False:
+            bases = [_RowDataClsMixin]
+        else:
+            bases = [_RowORMModelMixin]
+    else:
+        if create_orm_model is False:
+            bases = [_RowDataClsMixin, *bases]
+        else:
+            bases = [_RowORMModelMixin, *bases]
+
+    if create_orm_model:
+        attributes: list[tuple[str, Any, field]] = [
+            (atr, Any)
+            for atr in column_names
+        ]
+        init = False
+    else:
+        attributes: list[tuple[str, Any, field]] = [
+            (atr, Any, field(default=None))
+            for atr in column_names
+        ]
+
+        attributes.extend([
+            ("changed_columns", set, field(default_factory=lambda: set())),
+            ("table", Any, field(default=None))
+        ])
 
     return make_dataclass(
         f"Row{table_name}DataClass",
         attributes,
         repr=False,
-        bases=(*bases, _RowDataClsMixin),
+        bases=(*bases,),
+        init=init,
     )
 
     # data_cls.__repr__ = repr

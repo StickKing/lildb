@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 TAnyType = TypeVar("TAnyType")
 
 
-class TypedColumn(Generic[TAnyType]):
+class TColumn(Generic[TAnyType]):
     """Typed Column."""
 
     __slots__ = ()
@@ -79,7 +79,7 @@ class DBTableGetterMixin:
         raise AssertionError(msg)
 
 
-class MColumn(TypedColumn[TAnyType]):
+class MColumn(TColumn[TAnyType]):
     """Model column discriptor."""
 
     __slots__ = (
@@ -140,7 +140,7 @@ class MColumn(TypedColumn[TAnyType]):
         )
 
 
-class RelationForeignKey(ForeignKey, TypedColumn, DBTableGetterMixin):
+class RelationForeignKey(ForeignKey, TColumn, DBTableGetterMixin):
     """Relation foreign key."""
 
     __slots__ = ()
@@ -190,7 +190,7 @@ class RelationForeignKey(ForeignKey, TypedColumn, DBTableGetterMixin):
         setattr(instance, self.column, ref_table_value)
 
 
-class Relation(TypedColumn, DBTableGetterMixin):
+class Relation(TColumn, DBTableGetterMixin):
     """
     Relation is a descriptor for dealing
     with one-to-many or many-to-many relationships.

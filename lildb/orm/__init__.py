@@ -10,14 +10,14 @@ if TYPE_CHECKING:
 from .orm import MColumn
 from .orm import Relation
 from .orm import RelationForeignKey
-from .orm import TypedColumn
+from .orm import TColumn
 from .utils import create_table_and_data_cls_row
 
 
 __all__ = (
     "RelationForeignKey",
     "Relation",
-    "TypedColumn",
+    "TColumn",
     "create_table_and_data_cls_row",
     "TModelClass",
     "MColumn",

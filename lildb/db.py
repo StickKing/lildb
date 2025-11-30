@@ -268,7 +268,7 @@ class DB:
                 table_data_row_cls,
             )
             cls.orm_classes[table_data_row_cls[0]["table_name"]] = model_cls
-            return model_cls
+            return table_data_row_cls[1]
 
         if model_cls is None and path is not None:
             return wrap
@@ -276,7 +276,19 @@ class DB:
         table_data_row_cls = create_table_and_data_cls_row(model_cls)
         cls._registered_tables_data[path].append(table_data_row_cls)
         cls.orm_classes[table_data_row_cls[0]["table_name"]] = model_cls
-        return model_cls
+        return table_data_row_cls[1]
+
+    def add(self, orm_obj: Any) -> None:
+        """Add new ORM object in db."""
+        if hasattr(orm_obj, "orm_obj") is False:
+            msg = "Unknown object type"
+            raise TypeError(msg)
+
+        table_name: str = orm_obj.__table_name__
+
+        table_obj: Table = getattr(self, table_name)
+        orm_obj.table = table_obj
+        table_obj.add(orm_obj.get_row_data_as_dict())
 
 
 class Future:

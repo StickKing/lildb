@@ -3,19 +3,24 @@ from __future__ import annotations
 
 import json
 from abc import abstractmethod
+from collections.abc import Mapping
+from dataclasses import asdict
+from dataclasses import fields
+from dataclasses import is_dataclass
 from datetime import date
 from datetime import datetime
 from datetime import time
+from decimal import Decimal
 from enum import Enum
+from fractions import Fraction
 from functools import singledispatchmethod
 from numbers import Number
 from typing import Any
-from typing import Callable
-from typing import Hashable
 from typing import Literal
 from typing import Protocol
 from typing import TypedDict
 from typing import TypeVar
+from typing import Union
 
 from typing_extensions import NotRequired
 from typing_extensions import TypeAlias
@@ -28,6 +33,7 @@ from .enumcls import UpdateAction
 __all__ = (
     "BaseType",
     "Integer",
+    "DataClassJson",
     "Real",
     "Text",
     "Blob",
@@ -68,23 +74,6 @@ class ORMColumnProtocol(Protocol):
         ...
 
 
-class BaseORMColumnVixin:
-    """Base serializers methods."""
-
-    __slots__ = ()
-
-    def to_db(self, value: Any) -> Any:
-        """Serialize python obj to db data."""
-        if value is None:
-            return None
-        return value
-
-    @singledispatchmethod
-    def to_python(self, value) -> Any:
-        """Serialize db data to python obj."""
-
-
-
 class ColumnString:
     """Columns string."""
 
@@ -106,7 +95,7 @@ class ColumnString:
         ...
 
 
-class BaseType(ColumnString, ORMColumnProtocol):
+class BaseType(ColumnString):
     """Base column type."""
 
     __slots__ = (
@@ -156,7 +145,7 @@ class BaseType(ColumnString, ORMColumnProtocol):
         return str(self.data)
 
 
-class Integer(BaseType, BaseORMColumnVixin):
+class Integer(BaseType):
     """Integer type."""
 
     __slots__ = ("autoincrement",)
@@ -199,9 +188,63 @@ class Integer(BaseType, BaseORMColumnVixin):
             )
         return self.data
 
+    @singledispatchmethod
+    def to_db(self, value) -> Any:
+        """Serialize python obj to db data."""
+        msg = "Unknown type value can be only number"
+        raise TypeError(msg)
 
-class Real(BaseType, BaseORMColumnVixin):
+    @to_db.register
+    def _(self, value: None) -> None:
+        """Serialize python obj to db data."""
+        return value
+
+    @to_db.register
+    def _(self, value: str) -> int:
+        """Serialize python obj to db data."""
+        return int(value)
+
+    @to_db.register
+    def _(self, value: int) -> int:
+        """Serialize python obj to db data."""
+        return value
+
+    @to_db.register
+    def _(self, value: float) -> int:
+        """Serialize python obj to db data."""
+        return int(value)
+
+    @to_db.register
+    def _(self, value: Decimal) -> int:
+        """Serialize python obj to db data."""
+        return int(value)
+
+    @to_db.register
+    def _(self, value: Fraction) -> int:
+        """Serialize python obj to db data."""
+        return int(value)
+
+    @singledispatchmethod
+    def to_python(self, value) -> Any:
+        """Serialize db data to python obj."""
+        msg = "Unknown type"
+        raise TypeError(msg)
+
+    @to_python.register
+    def _(self, value: int) -> int:
+        """Serialize python obj to db data."""
+        return value
+
+    @to_python.register
+    def _(self, value: None) -> None:
+        """Serialize db data to python obj."""
+        return value
+
+
+class Real(BaseType):
     """REAL column type."""
+
+    __slots__ = ()
 
     def __init__(
         self,
@@ -228,9 +271,63 @@ class Real(BaseType, BaseORMColumnVixin):
             **kwargs,
         )
 
+    @singledispatchmethod
+    def to_db(self, value) -> Any:
+        """Serialize python obj to db data."""
+        msg = "Unknown type, value can be only number"
+        raise TypeError(msg)
 
-class Text(BaseType, BaseORMColumnVixin):
+    @to_db.register
+    def _(self, value: None) -> None:
+        """Serialize python obj to db data."""
+        return value
+
+    @to_db.register
+    def _(self, value: float) -> float:
+        """Serialize python obj to db data."""
+        return value
+
+    @to_db.register
+    def _(self, value: int) -> int:
+        """Serialize python obj to db data."""
+        return value
+
+    @to_db.register
+    def _(self, value: Decimal) -> Decimal:
+        """Serialize python obj to db data."""
+        return value
+
+    @to_db.register
+    def _(self, value: Fraction) -> Fraction:
+        """Serialize python obj to db data."""
+        return value
+
+    @singledispatchmethod
+    def to_python(self, value) -> Any:
+        """Serialize db data to python obj."""
+        msg = "Unknown type, value can be only number"
+        raise TypeError(msg)
+
+    @to_python.register
+    def _(self, value: None) -> None:
+        """Serialize db data to python obj."""
+        return value
+
+    @to_python.register
+    def _(self, value: float) -> float:
+        """Serialize db data to python obj."""
+        return value
+
+    @to_python.register
+    def _(self, value: int) -> int:
+        """Serialize db data to python obj."""
+        return value
+
+
+class Text(BaseType):
     """TEXT column type."""
+
+    __slots__ = ()
 
     def __init__(
         self,
@@ -257,9 +354,43 @@ class Text(BaseType, BaseORMColumnVixin):
             **kwargs,
         )
 
+    @singledispatchmethod
+    def to_db(self, value) -> Any:
+        """Serialize python obj to db data."""
+        msg = "Unknown type, value can be only str"
+        raise TypeError(msg)
 
-class Blob(BaseType, BaseORMColumnVixin):
+    @to_db.register
+    def _(self, value: None) -> None:
+        """Serialize python obj to db data."""
+        return value
+
+    @to_db.register
+    def _(self, value: str) -> str:
+        """Serialize python obj to db data."""
+        return value
+
+    @singledispatchmethod
+    def to_python(self, value) -> Any:
+        """Serialize db data to python obj."""
+        msg = "Unknown type, can be only str"
+        raise TypeError(msg)
+
+    @to_python.register
+    def _(self, value: None) -> None:
+        """Serialize db data to python obj."""
+        return value
+
+    @to_python.register
+    def _(self, value: str) -> str:
+        """Serialize db data to python obj."""
+        return value
+
+
+class Blob(BaseType):
     """BLOB column type."""
+
+    __slots__ = ()
 
     def __init__(
         self,
@@ -279,6 +410,38 @@ class Blob(BaseType, BaseORMColumnVixin):
             "BLOB",
             **kwargs,
         )
+
+    @singledispatchmethod
+    def to_db(self, value: Any) -> Any:
+        """Serialize python obj to db data."""
+        msg = "Unknown type, value can be only bytes"
+        raise TypeError(msg)
+
+    @to_db.register
+    def _(self, value: None) -> None:
+        """Serialize python obj to db data."""
+        return value
+
+    @to_db.register
+    def _(self, value: bytes) -> bytes:
+        """Serialize python obj to db data."""
+        return value
+
+    @singledispatchmethod
+    def to_python(self, value: Any) -> Any:
+        """Serialize db data to python obj."""
+        msg = "Unknown type, can be only str"
+        raise TypeError(msg)
+
+    @to_python.register
+    def _(self, value: None) -> None:
+        """Serialize db data to python obj."""
+        return value
+
+    @to_python.register
+    def _(self, value: bytes) -> bytes:
+        """Serialize db data to python obj."""
+        return value
 
 
 class ForeignKey(BaseType):
@@ -325,12 +488,11 @@ class ForeignKey(BaseType):
         return self()
 
 
-class Json(Text, ORMColumnProtocol):
+class Json(BaseType):
     """TEXT column type with dict conversion."""
 
     __slots__ = (
         "_json_module",
-        "_factory_cls",
     )
 
     def __init__(
@@ -338,34 +500,127 @@ class Json(Text, ORMColumnProtocol):
         default: str | None = None,
         *,
         json_module: Any = json,
-        factory_cls: type[Any] | None = None,
         **kwargs: Unpack[TBaseTypeKwargs],
     ) -> None:
         super().__init__(
+            "TEXT",
             default,
             **kwargs,
         )
         self._json_module = json_module
-        self._factory_cls = factory_cls
 
-    def to_db(self, value: dict | str) -> str:
+    @singledispatchmethod
+    def to_db(self, value: Any) -> Any:
         """Serialize python obj to db data."""
-        if isinstance(value, str):
-            return value
+        msg = "Unknown type, value can be only str or dict"
+        raise TypeError(msg)
+
+    @to_db.register
+    def _(self, value: None) -> None:
+        """Serialize python obj to db data."""
+        return value
+
+    @to_db.register
+    def _(self, value: str) -> str:
+        """Serialize python obj to db data."""
+        return value
+
+    @to_db.register
+    def _(self, value: Mapping) -> str:
+        """Serialize python obj to db data."""
         return self._json_module.dumps(value)
 
-    def to_python(self, value: str | None) -> dict | None:
+    @singledispatchmethod
+    def to_python(self, value: Any) -> Any:
         """Serialize db data to python obj."""
-        if value is None:
-            return None
+        msg = "Unknown type, can be only str"
+        raise TypeError(msg)
 
+    @to_python.register
+    def _(self, value: None) -> None:
+        """Serialize db data to python obj."""
+        return value
+
+    @to_python.register
+    def _(self, value: str) -> dict:
+        """Serialize db data to python obj."""
+        return self._json_module.loads(value)
+
+
+class DataClassJson(BaseType):
+    """Text column."""
+
+    __slots__ = (
+        "_json_module",
+        "_data_class",
+    )
+
+    def __init__(
+        self,
+        default: str | None = None,
+        *,
+        data_class: Any,
+        json_module: Any = json,
+        **kwargs: Unpack[TBaseTypeKwargs],
+    ) -> None:
+        super().__init__(
+            "TEXT",
+            default,
+            **kwargs,
+        )
+        if is_dataclass(data_class) is False:
+            msg = "data_class is not a data class"
+            raise TypeError(msg)
+        self._data_class = data_class
+        self._json_module = json_module
+
+    @singledispatchmethod
+    def to_db(self, value: Any) -> Any:
+        """Serialize python obj to db data."""
+        if is_dataclass(value):
+            return self._json_module.dumps(asdict(value))
+        msg = "Unknown type"
+        raise TypeError(msg)
+
+    @to_db.register
+    def _(self, value: None) -> None:
+        """Serialize python obj to db data."""
+        return value
+
+    @to_db.register
+    def _(self, value: str) -> str:
+        """Serialize python obj to db data."""
+        return value
+
+    @to_db.register
+    def _(self, value: Mapping) -> str:
+        """Serialize python obj to db data."""
+        return self._json_module.dumps(value)
+
+    @singledispatchmethod
+    def to_python(self, value: Any) -> Any:
+        """Serialize db data to python obj."""
+        msg = "Unknown type"
+        raise TypeError(msg)
+
+    @to_python.register
+    def _(self, value: None) -> None:
+        """Serialize db data to python obj."""
+        return value
+
+    @to_python.register
+    def _(self, value: str) -> Any:
+        """Serialize db data to python obj."""
         data = self._json_module.loads(value)
-        if self._factory_cls is None:
-            return data
-        return self._factory_cls(data)
+        if not data:
+            data = {
+                field.name: None
+                for field in fields(self._data_class)
+            }
+        return self._data_class(**data)
 
 
-class DateTime(Text, ORMColumnProtocol):
+class DateTime(BaseType):
     """TEXT or REAL column type with dict conversion."""
 
     __slots__ = ("_datetime_db_format",)
@@ -377,56 +632,95 @@ class DateTime(Text, ORMColumnProtocol):
         datetime_db_format: TDateTimeDBFormat = "ISO",
         **kwargs: Unpack[TBaseTypeKwargs],
     ) -> None:
+        db_type = "TEXT"
+
+        if datetime_db_format not in {"ISO", "timestamp"}:
+            msg = "Unknown format for datetime_db_format"
+            raise ValueError(msg)
+
+        self._datetime_db_format = datetime_db_format
+        if datetime_db_format == "timestamp":
+            db_type = "REAL"
+
         super().__init__(
+            db_type,
             default,
             **kwargs,
         )
-        self._datetime_db_format = datetime_db_format
-        if datetime_db_format == "timestamp":
-            self.data = "REAL"
 
-    def to_db(
-        self,
-        value: datetime | str | float | None,
-    ) -> str | float | None:
+    @singledispatchmethod
+    def to_db(self, value: Any) -> Any:
         """Serialize python obj to db data."""
-        if value is None:
-            return None
+        msg = "Unknown type"
+        raise TypeError(msg)
 
-        # for __init__ data
-        if isinstance(value, (float, str)):
-            return value
+    @to_db.register
+    def _(self, value: None) -> None:
+        """Serialize python obj to db data."""
+        return value
 
-        serialize_func: Callable[[], str | float | Any] | None = {
-            "timestamp": value.timestamp,
-            "ISO": value.isoformat,
-        }.get(self._datetime_db_format, None)
+    @to_db.register
+    def _(self, value: str) -> str:
+        """Serialize python obj to db data."""
+        if self._datetime_db_format != "ISO":
+            msg = "Unknown type"
+            raise TypeError(msg)
+        return value
 
-        if serialize_func is None:
-            return None
+    @to_db.register
+    def _(self, value: float) -> float:
+        """Serialize python obj to db data."""
+        if self._datetime_db_format != "timestamp":
+            msg = "Unknown type"
+            raise TypeError(msg)
+        return value
 
-        return serialize_func()
+    @to_db.register
+    def _(self, value: datetime) -> Union[float, str]:
+        """Serialize python obj to db data."""
+        if self._datetime_db_format == "timestamp":
+            return value.timestamp()
+        return value.isoformat()
 
-    def to_python(
-        self,
-        value: str | float | None,
-    ) -> datetime | None:
+    @to_db.register
+    def _(self, value: date) -> Union[float, str]:
+        """Serialize python obj to db data."""
+        datetime_value = datetime.combine(value, datetime.min.time())
+        if self._datetime_db_format == "timestamp":
+            return datetime_value.timestamp()
+        return datetime_value.isoformat()
+
+    @singledispatchmethod
+    def to_python(self, value: Any) -> Any:
         """Serialize db data to python obj."""
-        if value is None:
-            return None
+        msg = "Unknown type, can be only str"
+        raise TypeError(msg)
 
-        serialize_func: Callable[[str | float], datetime] | None = {
-            "timestamp": datetime.fromtimestamp,
-            "ISO": datetime.fromisoformat,
-        }.get(self._datetime_db_format)
+    @to_python.register
+    def _(self, value: None) -> None:
+        """Serialize db data to python obj."""
+        return value
 
-        if serialize_func is None:
-            return None
+    @to_python.register
+    def _(self, value: str) -> str:
+        """Serialize db data to python obj."""
+        if self._datetime_db_format != "ISO":
+            msg = "Unknown type"
+            raise TypeError(msg)
 
-        return serialize_func(value)
+        return datetime.fromisoformat(value)
+
+    @to_python.register
+    def _(self, value: float) -> float:
+        """Serialize db data to python obj."""
+        if self._datetime_db_format != "timestamp":
+            msg = "Unknown type"
+            raise TypeError(msg)
+
+        return datetime.fromtimestamp(value)
 
 
-class Date(Text):
+class Date(BaseType):
     """TEXT or REAL or INTEGER column type with dict conversion."""
 
     __slots__ = ("_date_db_format",)
@@ -438,10 +732,7 @@ class Date(Text):
         date_db_format: TDateDBFormat = "ISO",
         **kwargs: Unpack[TBaseTypeKwargs],
     ) -> None:
-        super().__init__(
-            default,
-            **kwargs,
-        )
+        db_type = "TEXT"
         self._date_db_format = date_db_format
 
         if date_db_format not in {"timestamp", "ISO", "ordinal"}:
@@ -449,44 +740,65 @@ class Date(Text):
             raise ValueError(msg)
 
         if date_db_format == "timestamp":
-            self.data = "REAL"
+            db_type = "REAL"
 
         if date_db_format == "ordinal":
-            self.data = "INTEGER"
+            db_type = "INTEGER"
 
-    def to_db(
-        self,
-        value: datetime | date | None,
-    ) -> str | float | int | None:
-        """Serialize python obj to db data."""
-        if value is None:
-            return None
-
-        # for __init__ data
-        if isinstance(value, (float, str, int)):
-            return value
-
-        if isinstance(value, datetime):
-            serialize_func = {
-                "timestamp": value.timestamp,
-                "ISO": value.date().isoformat,
-                "ordinal": value.toordinal,
-            }.get(self._date_db_format, None)
-        else:
-            value_datetime = datetime.combine(value, datetime.min.time())
-            serialize_func = {
-                "timestamp": value_datetime.timestamp,
-                "ISO": value.isoformat,
-                "ordinal": value.toordinal,
-            }.get(self._date_db_format, None)
-
-        if serialize_func is None:
-            return None
-
-        return serialize_func()
+        super().__init__(
+            db_type,
+            default,
+            **kwargs,
+        )
 
     @singledispatchmethod
-    def to_python(self, value) -> Any:
+    def to_db(self, value: Any) -> Any:
+        """Serialize python obj to db data."""
+        msg = "Unknown type"
+        raise TypeError(msg)
+
+    @to_db.register
+    def _(self, value: None) -> None:
+        """Serialize python obj to db data."""
+        return value
+
+    @to_db.register
+    def _(self, value: str) -> str:
+        """Serialize python obj to db data."""
+        if self._date_db_format != "ISO":
+            msg = "Unknown type"
+            raise TypeError(msg)
+        return value
+
+    @to_db.register
+    def _(self, value: float) -> float:
+        """Serialize python obj to db data."""
+        if self._date_db_format != "timestamp":
+            msg = "Unknown type"
+            raise TypeError(msg)
+        return value
+
+    @to_db.register
+    def _(self, value: datetime) -> Union[float, str, int]:
+        """Serialize python obj to db data."""
+        if self._date_db_format == "timestamp":
+            return value.timestamp()
+        if self._date_db_format == "ordinal":
+            return value.toordinal()
+        return value.date().isoformat()
+
+    @to_db.register
+    def _(self, value: date) -> Union[float, str, int]:
+        """Serialize python obj to db data."""
+        if self._date_db_format == "timestamp":
+            datetime_value = datetime.combine(value, datetime.min.time())
+            return datetime_value.timestamp()
+        if self._date_db_format == "ordinal":
+            return value.toordinal()
+        return value.isoformat()
+
+    @singledispatchmethod
+    def to_python(self, value: Any) -> Any:
         """Serialize db data to python obj."""
         msg = "Unknown type"
         raise TypeError(msg)
@@ -522,56 +834,62 @@ class Date(Text):
 
         return datetime.fromordinal(value).date()
 
-    # def to_python(
-    #     self,
-    #     value: str | float | None,
-    # ) -> date | None:
-    #     """Serialize db data to python obj."""
-    #     if value is None:
-    #         return value
 
-    #     serialize_func = {
-    #         "timestamp": datetime.fromtimestamp,
-    #         "ISO": datetime.fromisoformat,
-    #         "ordinal": datetime.fromordinal,
-    #     }.get(self._date_db_format)
-
-    #     if serialize_func is None:
-    #         return None
-
-    #     return serialize_func(value).date()
-
-
-class Time(Text, ORMColumnProtocol):
+class Time(BaseType):
     """TEXT column type with dict conversion."""
 
     __slots__ = ()
 
-    def to_db(
+    def __init__(
         self,
-        value: time | str | None,
-    ) -> str | None:
+        default: str | None = None,
+        **kwargs: Unpack[TBaseTypeKwargs],
+    ) -> None:
+        super().__init__(
+            "TEXT",
+            default,
+            **kwargs,
+        )
+
+    @singledispatchmethod
+    def to_db(self, value: Any) -> Any:
         """Serialize python obj to db data."""
-        if value is None:
-            return None
+        msg = "Unknown type, value can be only str or dict"
+        raise TypeError(msg)
 
-        if isinstance(value, str):
-            return value
+    @to_db.register
+    def _(self, value: None) -> None:
+        """Serialize python obj to db data."""
+        return value
 
+    @to_db.register
+    def _(self, value: str) -> str:
+        """Serialize python obj to db data."""
+        return value
+
+    @to_db.register
+    def _(self, value: time) -> str:
+        """Serialize python obj to db data."""
         return value.isoformat()
 
-    def to_python(
-        self,
-        value: str | None,
-    ) -> time | None:
+    @singledispatchmethod
+    def to_python(self, value: Any) -> Any:
         """Serialize db data to python obj."""
-        if value is None:
-            return None
+        msg = "Unknown type, can be only str"
+        raise TypeError(msg)
 
+    @to_python.register
+    def _(self, value: None) -> None:
+        """Serialize db data to python obj."""
+        return value
+
+    @to_python.register
+    def _(self, value: str) -> time:
+        """Serialize db data to python obj."""
         return time.fromisoformat(value)
 
 
-class EnumName(Text):
+class EnumName(BaseType):
     """"TEXT type that stores the name from an Enum object."""
 
     __slots__ = (
@@ -587,37 +905,55 @@ class EnumName(Text):
         **kwargs: Unpack[TBaseTypeKwargs],
     ) -> None:
         super().__init__(
+            "TEXT",
             default,
             **kwargs,
         )
         self._enum_cls = enum_cls
         self._enum_names = {item.name for item in enum_cls}
 
-    def to_db(self, value: Any | str | None) -> str | Hashable | None:
-        """Serialize to db type."""
-        if value is None:
-            return None
+    @singledispatchmethod
+    def to_db(self, value: Any) -> Any:
+        """Serialize python obj to db data."""
+        msg = "Unknown type, value can be only str or dict"
+        raise TypeError(msg)
 
-        if isinstance(value, Hashable):
-            if value in self._enum_names:
-                return value
+    @to_db.register
+    def _(self, value: None) -> None:
+        """Serialize python obj to db data."""
+        return value
 
-            msg = "Unknown type"
-            raise TypeError(msg)
+    @to_db.register
+    def _(self, value: str) -> str:
+        """Serialize python obj to db data."""
+        if value in self._enum_names:
+            return value
+        msg = f"Enum do not have a '{value}' name"
+        raise ValueError(msg)
 
-        if isinstance(value, Enum):
-            return value.name
+    @to_db.register
+    def _(self, value: Enum) -> str:
+        """Serialize python obj to db data."""
+        return value.name
 
-        return self._enum_cls(value).name
+    @singledispatchmethod
+    def to_python(self, value: Any) -> Any:
+        """Serialize db data to python obj."""
+        msg = "Unknown type, can be only str"
+        raise TypeError(msg)
 
-    def to_python(self, value: str | None) -> Any:
-        """Serialize to python obj."""
-        if value is None:
-            return None
+    @to_python.register
+    def _(self, value: None) -> None:
+        """Serialize db data to python obj."""
+        return value
+
+    @to_python.register
+    def _(self, value: str) -> Any:
+        """Serialize db data to python obj."""
         return getattr(self._enum_cls, value)
 
 
-class EnumValue(Text):
+class EnumValue(BaseType):
     """"TEXT type that stores the value from an Enum object."""
 
     __slots__ = (
@@ -633,36 +969,43 @@ class EnumValue(Text):
         **kwargs: Unpack[TBaseTypeKwargs],
     ) -> None:
         super().__init__(
+            "TEXT",
             default,
             **kwargs,
         )
         self._enum_cls = enum_cls
         self._enum_values = {item.value for item in enum_cls}
 
-    def to_db(self, value: type[Enum] | Hashable | None) -> Any:
-        """Serialize to python obj."""
-        if value is None:
-            return None
+    @singledispatchmethod
+    def to_db(self, value: Any) -> Any:
+        """Serialize python obj to db data."""
+        if value in self._enum_values:
+            return value
+        msg = f"Enum do not have a '{value}' value"
+        raise ValueError(msg)
 
-        # __init__ dataclass
-        if isinstance(value, Hashable):
-            if value in self._enum_values:
-                return value
+    @to_db.register
+    def _(self, value: None) -> None:
+        """Serialize python obj to db data."""
+        return value
 
-            msg = "Unknown type"
-            raise TypeError(msg)
-
+    @to_db.register
+    def _(self, value: Enum) -> Any:
+        """Serialize python obj to db data."""
         return value.value
 
-    def to_python(self, value: Any) -> Enum | None:
-        """Serialize to db type."""
-        if value is None:
-            return None
-
+    @singledispatchmethod
+    def to_python(self, value: Any) -> Any:
+        """Serialize db data to python obj."""
         return self._enum_cls(value)
 
+    @to_python.register
+    def _(self, value: None) -> None:
+        """Serialize db data to python obj."""
+        return value
 
-class EnumHide(Text):
+
+class EnumHide(BaseType):
     """"
     TEXT type that stores the name from an Enum object.
     And return only value without enum obj.
@@ -681,31 +1024,49 @@ class EnumHide(Text):
         **kwargs: Unpack[TBaseTypeKwargs],
     ) -> None:
         super().__init__(
+            "TEXT",
             default,
             **kwargs,
         )
         self._enum_cls = enum_cls
         self._enum_names = {item.name for item in enum_cls}
 
-    def to_db(
-        self,
-        value: type[Enum] | Hashable | None,
-    ) -> str | Hashable | None:
-        """Serialize to db type."""
-        if value is None:
-            return None
+    @singledispatchmethod
+    def to_db(self, value: Any) -> Any:
+        """Serialize python obj to db data."""
+        msg = "Unknown type"
+        raise TypeError(msg)
 
-        # __init__ dataclass
-        if isinstance(value, Hashable) and value in self._enum_names:
+    @to_db.register
+    def _(self, value: None) -> None:
+        """Serialize python obj to db data."""
+        return value
+
+    @to_db.register
+    def _(self, value: str) -> str:
+        """Serialize python obj to db data."""
+        if value in self._enum_names:
             return value
+        msg = f"Enum do not have a '{value}' name"
+        raise ValueError(msg)
 
-        if isinstance(value, Enum):
-            return value.name
+    @to_db.register
+    def _(self, value: Enum) -> str:
+        """Serialize python obj to db data."""
+        return value.name
 
-        return self._enum_cls(value).name
+    @singledispatchmethod
+    def to_python(self, value: Any) -> Any:
+        """Serialize db data to python obj."""
+        msg = "Unknown type"
+        raise TypeError(msg)
 
-    def to_python(self, value: str | None) -> Any:
-        """Serialize to python obj."""
-        if value is None:
-            return None
+    @to_python.register
+    def _(self, value: None) -> None:
+        """Serialize db data to python obj."""
+        return value
+
+    @to_python.register
+    def _(self, value: str) -> Any:
+        """Serialize db data to python obj."""
         return getattr(self._enum_cls, value).value

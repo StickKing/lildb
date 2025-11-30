@@ -17,7 +17,7 @@ from typing_extensions import get_origin
 from typing_extensions import get_type_hints
 
 from lildb.orm.orm import MColumn
-from lildb.orm.orm import TypedColumn
+from lildb.orm.orm import TColumn
 
 from ..column_types import BaseType
 from ..column_types import Blob
@@ -72,7 +72,7 @@ def _get_table_columns(
     foreign_keys: TForeignKeys,
 ) -> None:
     """Get table columns from cls."""
-    annotations: dict[str, TypedColumn] = get_type_hints(model_cls)
+    annotations: dict[str, TColumn] = get_type_hints(model_cls)
 
     for key, value in model_cls.__dict__.items():
 
@@ -96,7 +96,7 @@ def _get_table_columns(
             continue
 
         real_cls = get_origin(value)
-        if real_cls is not TypedColumn:
+        if real_cls is not TColumn:
             continue
 
         python_type, = get_args(value)
@@ -154,9 +154,10 @@ def create_table_and_data_cls_row(
         table_name,
         list(table_columns.keys()),
         bases=[model_cls],
-        default_none=False,
+        create_orm_model=True,
     )
 
     row_cls.orm_obj = True
+    row_cls.__table_name__ = table_name.lower()
 
     return table_data, row_cls
