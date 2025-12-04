@@ -145,6 +145,7 @@ class _RowORMModelMixin(_BaseRowDataClsMixin):
         return {
             name: getattr(self, f"_column_data_{name}_")
             for name in self.table.column_names
+            if getattr(self, f"_column_data_{name}_") is not None
         }
 
     def __setattr__(self, name: str, value: Any) -> None:

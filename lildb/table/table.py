@@ -78,7 +78,7 @@ class Table(Generic[TRow]):
         self.update = getattr(self, "update", Update)(self)
 
         # Sugar
-        self.add = self.insert
+        # self.add = self.insert
 
         self.c = Columns(self)
         self.columns = self.c
@@ -168,6 +168,22 @@ class Table(Generic[TRow]):
         # 0000
         if init_tables:
             self.db.initialize_tables()
+
+    def add(
+        self,
+        *objects: dict | Any,
+        returning: bool = False,
+    ) -> None | Any:
+        """Add objects in table."""
+        data = []
+
+        for obj in objects:
+            if isinstance(obj, dict):
+                data.append(obj)
+                continue
+            obj.table = self
+            data.append(obj.get_row_data_as_dict())
+        return self.insert(data, returning=returning)
 
     def __repr__(self) -> str:
         """Repr view."""

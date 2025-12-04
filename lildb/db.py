@@ -17,14 +17,18 @@ from typing import ClassVar
 from typing import Iterator
 from typing import MutableMapping
 from typing import Sequence
+from typing import TypeVar
 
 from typing_extensions import TypeAlias
+from typing_extensions import dataclass_transform
 
 from .enumcls import ResultFetch
 from .operations import CreateTable
 from .orm.utils import create_table_and_data_cls_row
 from .table.table import Table
 
+
+_T = TypeVar("_T")
 
 if TYPE_CHECKING:
     from .orm import TModelClass
@@ -188,7 +192,7 @@ class DB:
         else:
             cursor.execute(query, parameters)
 
-        if command in {"insert", "delete", "update", "create", "drop"}:
+        if command in {"delete", "update", "create", "drop"}:
             self.connect.commit()
 
         if command in {"drop", "create"}:
@@ -204,7 +208,14 @@ class DB:
 
         if result.value == "fetchmany":
             return result_func(size=size)
-        return result_func()
+
+        data = result_func()
+
+        cursor.close()
+        if command == "insert":
+            self.connect.commit()
+
+        return data
 
     def close(self) -> None:
         """Close connection."""
@@ -249,12 +260,13 @@ class DB:
         self.connect.commit()
 
     @classmethod
+    @dataclass_transform(kw_only_default=True)
     def register_table(
         cls,
-        model_cls: type[Any] = None,
+        model_cls: type[_T] = None,
         *,
         path: str | Path | None = None,
-    ) -> type[Any] | Callable[[type[Any]], type[Any]]:
+    ) -> type[_T] | Callable[[type[_T]], type[_T]]:
         """Registrate table.
 
         Args:
@@ -278,17 +290,25 @@ class DB:
         cls.orm_classes[table_data_row_cls[0]["table_name"]] = model_cls
         return table_data_row_cls[1]
 
-    def add(self, orm_obj: Any) -> None:
+    def add(self, *orm_objs: Any) -> list[int | None]:
         """Add new ORM object in db."""
-        if hasattr(orm_obj, "orm_obj") is False:
+        if hasattr(orm_objs[0], "orm_obj") is False:
             msg = "Unknown object type"
             raise TypeError(msg)
 
-        table_name: str = orm_obj.__table_name__
+        items_by_table: defaultdict[Table, list] = defaultdict(list)
 
-        table_obj: Table = getattr(self, table_name)
-        orm_obj.table = table_obj
-        table_obj.add(orm_obj.get_row_data_as_dict())
+        for obj in orm_objs:
+            table_name: str = obj.__table_name__
+            table_obj: Table = getattr(self, table_name)
+
+            items_by_table[table_obj].append(obj)
+
+        object_ids = []
+        for table, objects in items_by_table.items():
+            object_ids.append(table.add(*objects))
+
+        return object_ids
 
 
 class Future:

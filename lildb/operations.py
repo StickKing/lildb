@@ -268,9 +268,26 @@ class Insert(TableOperation):
 
     __slots__ = ()
 
+    def _as_list_row(
+        self,
+        items: Iterable[tuple[tuple[Any, ...]]],
+    ) -> list[ABCRow]:
+        """Create list rows."""
+        row_cls = self.table.row_cls
+        columns_name: Iterable[str] = self.table.column_names
+        return [
+            row_cls(
+                table=self.table,
+                **dict(zip(columns_name, item)),
+            )
+            for item in items
+        ]
+
     def query(
         self,
         data: Sequence[TQueryData],
+        *,
+        returning: bool = False,
     ) -> str:
         """Create insert sql-query."""
         query = ", ".join(
@@ -281,23 +298,49 @@ class Insert(TableOperation):
             name
             for name in data[0]
         )
-        return "INSERT INTO `{}` ({}) VALUES({})".format(
+        returning_str = ""
+        if returning:
+            all_column_names = ", ".join(
+                name
+                for name in self.table.column_names
+            )
+            returning_str = "RETURNING " + all_column_names
+        return "INSERT INTO `{}` ({}) VALUES({}) {}".format(
             self.table.name,
             colums_name,
             query,
+            returning_str,
         )
 
     def __call__(
         self,
         data: TQueryData | Sequence[TQueryData],
-    ) -> None:
+        *,
+        returning: bool = False,
+    ) -> int | None:
         """Insert-query for current table."""
         if not data:
             msg = "Data do not be empty."
             raise ValueError(msg)
+
         if isinstance(data, dict):
             data = (data,)
-        self.table.execute(self.query(data), data, many=True)
+
+        if returning is False:
+            self.table.execute(self.query(data), data, many=True)
+            return
+
+        if len(data) > 1:
+            msg = "Returning work with one item"
+            raise ValueError(msg)
+
+        result_items = self.table.execute(
+            self.query(data, returning=returning),
+            data[0],
+            result=ResultFetch.fetchall,
+        )
+        items = self._as_list_row(result_items)
+        return items[0]
 
 
 class Delete(TableOperation):
