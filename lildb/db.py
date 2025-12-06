@@ -192,7 +192,10 @@ class DB:
         else:
             cursor.execute(query, parameters)
 
-        if command in {"delete", "update", "create", "drop"}:
+        if (
+            command in {"delete", "update", "create", "drop", "insert"} and
+            result is None
+        ):
             self.connect.commit()
 
         if command in {"drop", "create"}:
@@ -200,6 +203,7 @@ class DB:
 
         # Check result
         if result is None:
+            cursor.close()
             return None
 
         ResultFetch(result)

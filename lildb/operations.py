@@ -363,7 +363,7 @@ class Delete(TableOperation):
             msg = "Value do not be empty."
             raise ValueError(msg)
         query_and = self._make_operator_query(filter_by, operator)
-        query = "DELETE FROM {} WHERE {}".format(
+        query = "DELETE FROM `{}` WHERE {}".format(
             self.table.name,
             query_and
         )
@@ -386,7 +386,7 @@ class Delete(TableOperation):
             filter_by["id"] = id
 
         if condition:
-            query = f"DELETE FROM {self.table.name} WHERE {condition}"
+            query = f"DELETE FROM `{self.table.name}` WHERE {condition}"
             self.table.execute(query)  # type: ignore
             return
 
@@ -410,6 +410,7 @@ class Update(TableOperation):
         **filter_by: Any,
     ) -> None:
         """Insert-query for current table."""
+        print(data)
         if not isinstance(data, dict):
             msg = "Incorrect type for 'data.'"
             raise TypeError(msg)

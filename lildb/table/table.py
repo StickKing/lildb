@@ -16,7 +16,10 @@ from ..operations import Select
 from ..operations import Update
 from ..rows import RowDict
 from ..rows import TRow
+from ..rows import contain_relation_objects
 from ..rows import make_row_data_cls
+from ..rows import process_add_relation_objects
+from ..rows import refresh_old_obj_by_new
 from .column import Columns
 
 
@@ -61,6 +64,7 @@ class Table(Generic[TRow]):
     ) -> None:
         """Initialize."""
         self.name = self.table_name or name
+        self.primary_keys = None
         if self.name is None:
             msg = "Table name do not be None."
             raise ValueError(msg)
@@ -126,14 +130,20 @@ class Table(Generic[TRow]):
     @cached_property
     def column_names(self) -> tuple[str, ...]:
         """Fetch table column name."""
-        stmt = "SELECT name FROM PRAGMA_TABLE_INFO('{}');".format(
+        stmt = "SELECT name, pk FROM PRAGMA_TABLE_INFO('{}');".format(
             self.name,
         )
         result = self.db.execute(stmt, result=ResultFetch.fetchall)
-        return tuple(
-            name[0].lower()
-            for name in result
-        )
+        names = []
+        primary_keys = []
+
+        for row in result:
+            names.append(row[0])
+            if row[1] == 1:
+                primary_keys.append(row[0])
+
+        self.primary_keys = tuple(primary_keys)
+        return tuple(names)
 
     @cached_property
     def id_exist(self) -> bool:
@@ -176,14 +186,37 @@ class Table(Generic[TRow]):
     ) -> None | Any:
         """Add objects in table."""
         data = []
+        objects_with_relation = []
+        insert_obj = None
 
         for obj in objects:
             if isinstance(obj, dict):
                 data.append(obj)
                 continue
+
             obj.table = self
+            process_add_relation_objects(obj, ref_type="RelationForeignKey")
+
+            if contain_relation_objects(obj):
+                objects_with_relation.append(obj)
+                continue
+
             data.append(obj.get_row_data_as_dict())
-        return self.insert(data, returning=returning)
+
+        if data:
+            insert_obj = self.insert(data, returning=returning)
+
+        new_obj = None
+        # too slow
+        for obj in objects_with_relation:
+            new_obj = self.insert(
+                obj.get_row_data_as_dict(),
+                returning=True,
+            )
+            refresh_old_obj_by_new(self, obj, new_obj)
+            process_add_relation_objects(obj)
+
+        return insert_obj or new_obj
 
     def __repr__(self) -> str:
         """Repr view."""

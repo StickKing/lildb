@@ -4,6 +4,7 @@ from __future__ import annotations
 import sys
 from abc import ABC
 from abc import abstractmethod
+from collections import defaultdict
 from dataclasses import _process_class  # type: ignore
 from dataclasses import field
 from dataclasses import fields
@@ -12,6 +13,7 @@ from typing import TYPE_CHECKING
 from typing import Any
 from typing import Callable
 from typing import Iterable
+from typing import Literal
 from typing import Sequence
 from typing import TypeVar
 
@@ -85,7 +87,8 @@ class _RowDataClsMixin(_BaseRowDataClsMixin):
             hasattr(self, "changed_columns") and
             self.changed_columns is not None and
             self.table is not None and
-            name.startswith("_") is False
+            name.startswith("_") is False and
+            name in self.table.column_names
         ):
             old_value = getattr(self, name)
             super().__setattr__(name, value)
@@ -114,8 +117,49 @@ class _RowDataClsMixin(_BaseRowDataClsMixin):
         }
 
 
+def contain_relation_objects(orm_object: _RowORMModelMixin) -> bool:
+    """Check object contain new relation objects."""
+    return len(orm_object._relation_object_add_funcs) > 0
+
+
+def refresh_old_obj_by_new(
+    table: Table,
+    old_orm_object: _RowORMModelMixin,
+    new_orm_object: _RowORMModelMixin,
+) -> None:
+    """Move relation funcs to other object."""
+    for name in table.column_names:
+        col_name = f"_column_data_{name}_"
+        setattr(
+            old_orm_object,
+            col_name,
+            getattr(new_orm_object, col_name)
+        )
+
+
+def process_add_relation_objects(
+    orm_object: _RowORMModelMixin,
+    ref_type: Literal["Relation", "RelationForeignKey"] | None = None,
+) -> None:
+    """Add relation object."""
+    if ref_type is None:
+        for funcs in orm_object._relation_object_add_funcs.values():
+            for func in funcs:
+                func()
+        orm_object._relation_object_add_funcs = defaultdict(list)
+        return
+
+    for func in orm_object._relation_object_add_funcs[ref_type]:
+        func()
+
+    orm_object._relation_object_add_funcs.pop(ref_type)
+
+
 class _RowORMModelMixin(_BaseRowDataClsMixin):
     """ORM row mixin."""
+
+    __table_name__: str
+    __relation_fields__: tuple[str]
 
     def __init__(self, **kwargs: Any) -> None:
         """Initialize orm object."""
@@ -123,11 +167,13 @@ class _RowORMModelMixin(_BaseRowDataClsMixin):
 
         self.table = kwargs.pop("table", None)
         self.changed_columns = set()
+        self._relation_object_add_funcs: defaultdict[list] = defaultdict(list)
 
         row_fields = {
             field.name
             for field in fields(self)
         }
+        row_fields.update(self.__relation_fields__)
 
         for key, value in kwargs.items():
             if key not in row_fields:
@@ -138,6 +184,7 @@ class _RowORMModelMixin(_BaseRowDataClsMixin):
         for name in row_fields:
             object.__setattr__(self, f"_column_data_{name}_", None)
 
+        self.orm_obj = True
         self._is_init = False
 
     def get_row_data_as_dict(self) -> dict:
@@ -158,7 +205,8 @@ class _RowORMModelMixin(_BaseRowDataClsMixin):
             hasattr(self, "changed_columns") and
             self.changed_columns is not None and
             self.table is not None and
-            name.startswith("_") is False
+            name.startswith("_") is False and
+            name in self.table.column_names
         ):
             old_value = getattr(self, name)
             super().__setattr__(name, value)
@@ -185,6 +233,11 @@ class _RowORMModelMixin(_BaseRowDataClsMixin):
             for name in self.table.column_names
             if name in self.changed_columns
         }
+
+    def change(self) -> None:
+        """Update this row."""
+        process_add_relation_objects(self)
+        super().change()
 
 
 class RowDict(ABCRow, dict):

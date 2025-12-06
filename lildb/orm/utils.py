@@ -16,9 +16,6 @@ from typing_extensions import get_args
 from typing_extensions import get_origin
 from typing_extensions import get_type_hints
 
-from lildb.orm.orm import MColumn
-from lildb.orm.orm import TColumn
-
 from ..column_types import BaseType
 from ..column_types import Blob
 from ..column_types import Date
@@ -28,6 +25,9 @@ from ..column_types import Integer
 from ..column_types import Real
 from ..column_types import Text
 from ..column_types import Time
+from ..orm import MColumn
+from ..orm import Relation
+from ..orm import TColumn
 from ..rows import make_row_data_cls
 
 
@@ -70,14 +70,19 @@ def _get_table_columns(
     model_cls: TModelClass,
     table_columns: TTableColumns,
     foreign_keys: TForeignKeys,
+    relation_names: list,
 ) -> None:
     """Get table columns from cls."""
     annotations: dict[str, TColumn] = get_type_hints(model_cls)
 
     for key, value in model_cls.__dict__.items():
 
+        if isinstance(value, Relation):
+            relation_names.append(key)
+
         if isinstance(value, ForeignKey):
             foreign_keys.append(value)
+            relation_names.append(key)
             continue
 
         if (
@@ -128,7 +133,12 @@ def _get_table_columns(
         return
 
     for parent_cls in model_cls.__bases__:
-        _get_table_columns(parent_cls, table_columns, foreign_keys)
+        _get_table_columns(
+            parent_cls,
+            table_columns,
+            foreign_keys,
+            relation_names,
+        )
 
 
 def create_table_and_data_cls_row(
@@ -138,7 +148,8 @@ def create_table_and_data_cls_row(
 
     table_columns: TTableColumns = {}
     foreign_keys: TForeignKeys = []
-    _get_table_columns(model_cls, table_columns, foreign_keys)
+    relation_names = []
+    _get_table_columns(model_cls, table_columns, foreign_keys, relation_names)
 
     table_name = model_cls.__name__
 
@@ -157,7 +168,8 @@ def create_table_and_data_cls_row(
         create_orm_model=True,
     )
 
-    row_cls.orm_obj = True
+    # row_cls.orm_obj = True
     row_cls.__table_name__ = table_name.lower()
+    row_cls.__relation_fields__ = tuple(relation_names)
 
     return table_data, row_cls
