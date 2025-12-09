@@ -194,10 +194,10 @@ class TestCreateTable:
             db,
             "Person",
             {
-                "id": Integer(),
-                "name": Text(),
-                "salary": Real(),
-                "img": Blob(),
+                "id": Integer(nullable=False),
+                "name": Text(nullable=False),
+                "salary": Real(nullable=False),
+                "img": Blob(nullable=False),
             }
         )
         assert query == (
@@ -212,10 +212,10 @@ class TestCreateTable:
             db,
             "Person",
             {
-                "id": Integer(default=10),
-                "name": Text(default='David'),
-                "salary": Real(default=150.5),
-                "img": Blob(),
+                "id": Integer(default=10, nullable=False),
+                "name": Text(default='David', nullable=False),
+                "salary": Real(default=150.5, nullable=False),
+                "img": Blob(nullable=False),
             }
         )
         assert query == (
@@ -230,10 +230,10 @@ class TestCreateTable:
             db,
             "Person",
             {
-                "id": Integer(unique=True),
-                "name": Text(unique=True),
-                "salary": Real(unique=True),
-                "img": Blob(unique=True),
+                "id": Integer(unique=True, nullable=False),
+                "name": Text(unique=True, nullable=False),
+                "salary": Real(unique=True, nullable=False),
+                "img": Blob(unique=True, nullable=False),
             }
         )
         assert query == (
@@ -248,10 +248,10 @@ class TestCreateTable:
             db,
             "Person",
             {
-                "id": Integer(nullable=True),
-                "name": Text(nullable=True),
-                "salary": Real(nullable=True),
-                "img": Blob(nullable=True),
+                "id": Integer(),
+                "name": Text(),
+                "salary": Real(),
+                "img": Blob(),
             }
         )
         assert query == (
@@ -266,7 +266,7 @@ class TestCreateTable:
             db,
             "Person",
             {
-                "id": Integer(primary_key=True, autoincrement=True),
+                "id": Integer(primary_key=True, autoincrement=True, nullable=False),
                 "name": Text(nullable=True, unique=True, default='David'),
                 "salary": Real(nullable=True, unique=True, default=100.5),
                 "img": Blob(nullable=True, unique=True),
@@ -287,10 +287,10 @@ class TestCreateTable:
             db,
             "Person",
             {
-                "id": Integer(),
-                "name": Text(),
-                "salary": Real(),
-                "img": Blob(),
+                "id": Integer(nullable=False),
+                "name": Text(nullable=False),
+                "salary": Real(nullable=False),
+                "img": Blob(nullable=False),
             },
             table_primary_key=("id",),
         )
@@ -307,10 +307,10 @@ class TestCreateTable:
             db,
             "Person",
             {
-                "id": Integer(default=10),
-                "name": Text(default='David'),
-                "salary": Real(default=150.5),
-                "img": Blob(),
+                "id": Integer(default=10, nullable=False),
+                "name": Text(default='David', nullable=False),
+                "salary": Real(default=150.5, nullable=False),
+                "img": Blob(nullable=False),
             },
             table_primary_key=("id",),
         )
@@ -327,10 +327,10 @@ class TestCreateTable:
             db,
             "Person",
             {
-                "id": Integer(unique=True),
-                "name": Text(unique=True),
-                "salary": Real(unique=True),
-                "img": Blob(unique=True),
+                "id": Integer(unique=True, nullable=False),
+                "name": Text(unique=True, nullable=False),
+                "salary": Real(unique=True, nullable=False),
+                "img": Blob(unique=True, nullable=False),
             },
             table_primary_key=("id", "name"),
         )
@@ -367,7 +367,7 @@ class TestCreateTable:
             db,
             "Person",
             {
-                "id": Integer(),
+                "id": Integer(nullable=False),
                 "name": Text(nullable=True, unique=True, default='David'),
                 "salary": Real(nullable=True, unique=True, default=100.5),
                 "img": Blob(nullable=True, unique=True),
@@ -390,11 +390,11 @@ class TestCreateTable:
             db,
             "Person",
             {
-                "id": Integer(),
-                "name": Text(),
-                "salary": Real(),
-                "img": Blob(),
-                "any_id": Integer(),
+                "id": Integer(nullable=False),
+                "name": Text(nullable=False),
+                "salary": Real(nullable=False),
+                "img": Blob(nullable=False),
+                "any_id": Integer(nullable=False),
             },
             foreign_keys=(ForeignKey("any_id", "Any", "id"),),
         )
@@ -412,11 +412,11 @@ class TestCreateTable:
             db,
             "Person",
             {
-                "id": Integer(default=10),
-                "name": Text(default='David'),
-                "salary": Real(default=150.5),
-                "img": Blob(),
-                "any_id": Integer(),
+                "id": Integer(default=10, nullable=False),
+                "name": Text(default='David', nullable=False),
+                "salary": Real(default=150.5, nullable=False),
+                "img": Blob(nullable=False),
+                "any_id": Integer(nullable=False),
             },
             foreign_keys=(ForeignKey("any_id", "Any", "id"),),
         )
@@ -434,11 +434,11 @@ class TestCreateTable:
             db,
             "Person",
             {
-                "id": Integer(unique=True),
-                "name": Text(unique=True),
-                "salary": Real(unique=True),
-                "img": Blob(unique=True),
-                "any_id": Integer(),
+                "id": Integer(unique=True, nullable=False),
+                "name": Text(unique=True, nullable=False),
+                "salary": Real(unique=True, nullable=False),
+                "img": Blob(unique=True, nullable=False),
+                "any_id": Integer(nullable=False),
             },
             foreign_keys=(ForeignKey("any_id", "Any", "id"),),
         )
@@ -460,7 +460,7 @@ class TestCreateTable:
                 "name": Text(nullable=True),
                 "salary": Real(nullable=True),
                 "img": Blob(nullable=True),
-                "any_id": Integer(),
+                "any_id": Integer(nullable=False),
             },
             foreign_keys=(ForeignKey("any_id", "Any", "id"),),
         )
@@ -482,7 +482,7 @@ class TestCreateTable:
                 "name": Text(nullable=True, unique=True, default='David'),
                 "salary": Real(nullable=True, unique=True, default=100.5),
                 "img": Blob(nullable=True, unique=True),
-                "any_id": Integer(),
+                "any_id": Integer(nullable=False),
             },
             foreign_keys=(ForeignKey("any_id", "Any", "id"),),
         )
@@ -503,11 +503,11 @@ class TestCreateTable:
             db,
             "Person",
             {
-                "id": Integer(),
-                "name": Text(),
-                "salary": Real(),
-                "img": Blob(),
-                "any_id": Integer(),
+                "id": Integer(nullable=False),
+                "name": Text(nullable=False),
+                "salary": Real(nullable=False),
+                "img": Blob(nullable=False),
+                "any_id": Integer(nullable=False),
             },
             table_primary_key=("id",),
             foreign_keys=(ForeignKey("any_id", "Any", "id"),),
@@ -527,11 +527,11 @@ class TestCreateTable:
             db,
             "Person",
             {
-                "id": Integer(default=10),
-                "name": Text(default='David'),
-                "salary": Real(default=150.5),
-                "img": Blob(),
-                "any_id": Integer(),
+                "id": Integer(default=10, nullable=False),
+                "name": Text(default='David', nullable=False),
+                "salary": Real(default=150.5, nullable=False),
+                "img": Blob(nullable=False),
+                "any_id": Integer(nullable=False),
             },
             table_primary_key=("id",),
             foreign_keys=(ForeignKey("any_id", "Any", "id"),),
@@ -551,11 +551,11 @@ class TestCreateTable:
             db,
             "Person",
             {
-                "id": Integer(unique=True),
-                "name": Text(unique=True),
-                "salary": Real(unique=True),
-                "img": Blob(unique=True),
-                "any_id": Integer(),
+                "id": Integer(unique=True, nullable=False),
+                "name": Text(unique=True, nullable=False),
+                "salary": Real(unique=True, nullable=False),
+                "img": Blob(unique=True, nullable=False),
+                "any_id": Integer(nullable=False),
             },
             table_primary_key=("id", "name"),
             foreign_keys=(ForeignKey("any_id", "Any", "id"),),
@@ -579,7 +579,7 @@ class TestCreateTable:
                 "name": Text(nullable=True),
                 "salary": Real(nullable=True),
                 "img": Blob(nullable=True),
-                "any_id": Integer(),
+                "any_id": Integer(nullable=False),
             },
             table_primary_key=("id", "name"),
             foreign_keys=(ForeignKey("any_id", "Any", "id"),),
@@ -603,8 +603,8 @@ class TestCreateTable:
                 "name": Text(nullable=True, unique=True, default='David'),
                 "salary": Real(nullable=True, unique=True, default=100.5),
                 "img": Blob(nullable=True, unique=True),
-                "any_id": Integer(),
-                "any_id2": Integer(),
+                "any_id": Integer(nullable=False),
+                "any_id2": Integer(nullable=False),
             },
             table_primary_key=("id", "name", "salary"),
             foreign_keys=(
@@ -662,7 +662,7 @@ class TestInsert:
             for id_ in range(2, 21)
         ]
         cursor = db_dict.connect.cursor()
-        db_dict.ttable.add(new_rows)
+        db_dict.ttable.add(*new_rows)
 
         stmt = "select * from ttable where id > 1"
         rows = cursor.execute(stmt).fetchmany()

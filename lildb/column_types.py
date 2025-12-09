@@ -138,6 +138,7 @@ class BaseType(ColumnString):
                 self.data += f" DEFAULT {self.default} "
         if self.primary_key:
             self.data += " PRIMARY KEY "
+            self.nullable = False
         if not self.nullable:
             self.data += " NOT NULL "
         if self.unique:
@@ -468,7 +469,7 @@ class ForeignKey(BaseType):
         self.second_table = second_table
         self.reference_column = reference_column
         self.on_delete = DeleteAction(on_delete) if on_delete else on_delete
-        self.on_update = DeleteAction(on_update) if on_update else on_update
+        self.on_update = UpdateAction(on_update) if on_update else on_update
         super().__init__("FOREIGN KEY(`{}`) REFERENCES `{}`(`{}`)")
 
     def __call__(self) -> str:

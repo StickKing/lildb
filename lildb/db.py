@@ -24,7 +24,7 @@ from typing_extensions import dataclass_transform
 
 from .enumcls import ResultFetch
 from .operations import CreateTable
-from .orm.utils import create_table_and_data_cls_row
+from .orm.model import create_table_and_data_cls_row
 from .table.table import Table
 
 

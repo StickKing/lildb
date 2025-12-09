@@ -9,8 +9,6 @@ from typing import Sequence
 from typing import TypeVar
 from typing import overload
 
-from lildb.rows import ABCRow
-
 from ..column_types import Date
 from ..column_types import DateTime
 from ..column_types import ForeignKey

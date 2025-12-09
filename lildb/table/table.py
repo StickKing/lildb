@@ -14,12 +14,12 @@ from ..operations import Insert
 from ..operations import Query
 from ..operations import Select
 from ..operations import Update
+from ..orm.utils import contain_relation_objects
+from ..orm.utils import process_add_relation_objects
+from ..orm.utils import refresh_old_obj_by_new
 from ..rows import RowDict
 from ..rows import TRow
-from ..rows import contain_relation_objects
 from ..rows import make_row_data_cls
-from ..rows import process_add_relation_objects
-from ..rows import refresh_old_obj_by_new
 from .column import Columns
 
 

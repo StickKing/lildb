@@ -7,11 +7,11 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .utils import TModelClass
 
+from .model import create_table_and_data_cls_row
 from .orm import MColumn
 from .orm import Relation
 from .orm import RelationForeignKey
 from .orm import TColumn
-from .utils import create_table_and_data_cls_row
 
 
 __all__ = (
