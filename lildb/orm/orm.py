@@ -9,6 +9,7 @@ from typing import Sequence
 from typing import TypeVar
 from typing import overload
 
+from ..column_types import DataClassJson
 from ..column_types import Date
 from ..column_types import DateTime
 from ..column_types import ForeignKey
@@ -94,6 +95,7 @@ class MColumn(TColumn[TAnyType]):
         DateTime,
         Date,
         Time,
+        DataClassJson,
     }
 
     def __init__(self, column_type: TColumnType) -> None:

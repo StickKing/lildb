@@ -3,13 +3,16 @@ from __future__ import annotations
 
 from abc import ABC
 from abc import abstractmethod
+from functools import wraps
 from typing import TYPE_CHECKING
 from typing import Any
+from typing import Callable
 from typing import Generator
 from typing import Iterable
 from typing import Literal
 from typing import MutableMapping
 from typing import Sequence
+from typing import TypeVar
 
 from .column_types import BaseType
 from .enumcls import ResultFetch
@@ -27,7 +30,7 @@ if TYPE_CHECKING:
 
     TOperator = Literal["AND", "and", "OR", "or", ","]
     TQueryData = dict[str, int | bool | str | None]
-
+    F = TypeVar("F", bound=Callable)
 
 __all__ = (
     "Query",
@@ -437,6 +440,37 @@ class Update(TableOperation):
         self.table.execute(query, data)  # type: ignore
 
 
+def generate_query(
+    func: F,
+) -> F:
+    """Generate new query object."""
+    moved_attr_names = (
+        "_body",
+        "_filters",
+        "_having",
+        "_orders",
+        "_groups",
+        "_limit",
+        "_offset",
+        "columns",
+    )
+
+    @wraps(func)
+    def wrap(self: Query, *args: Any, **kwargs: Any) -> Query:
+        """Wrap func."""
+        new_query = Query(self.table)
+        for attr_name in moved_attr_names:
+            setattr(
+                new_query,
+                attr_name,
+                getattr(self, attr_name)
+            )
+        new_query_func = getattr(new_query, func.__name__).__wrapped__
+        return new_query_func(new_query, *args, **kwargs)
+
+    return wrap
+
+
 class Query(TableOperation):
     """Create sql query with more params."""
 
@@ -570,6 +604,7 @@ class Query(TableOperation):
             result=ResultFetch.fetchall,
         )
 
+    @generate_query
     def limit(self, limit_number: int) -> Query:
         """Use limit in sql query."""
         if not isinstance(limit_number, int):
@@ -578,6 +613,7 @@ class Query(TableOperation):
         self._limit = limit_number
         return self
 
+    @generate_query
     def offset(self, offset_number: int) -> Query:
         """Use offset in sql query."""
         if not isinstance(offset_number, int):
@@ -586,6 +622,7 @@ class Query(TableOperation):
         self._offset = offset_number
         return self
 
+    @generate_query
     def order_by(self, *args: str, **orders: Literal["asc", "desc"]) -> Query:
         """Use order by in query."""
         order_types = {"asc", "desc"}
@@ -657,6 +694,7 @@ class Query(TableOperation):
         self._sum_tuples(attr_name, (filter_str,))
         # self._filters += (filter_str,)
 
+    @generate_query
     def where(
         self,
         *args: str,
@@ -678,6 +716,7 @@ class Query(TableOperation):
         self._add_filters(filter_by, operator, filter_operator)
         return self
 
+    @generate_query
     def having(
         self,
         *args: str,
@@ -699,6 +738,7 @@ class Query(TableOperation):
         self._add_filters(filter_by, operator, filter_operator, in_having=True)
         return self
 
+    @generate_query
     def group_by(self, *args: str | Column) -> Query:
         """Use group by operation."""
         self._groups += tuple(map(str, args))

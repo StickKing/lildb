@@ -35,7 +35,7 @@ from .utils import process_add_relation_objects
 
 TForeignKeys: TypeAlias = List[ForeignKey]
 TTableColumns: TypeAlias = Dict[str, BaseType]
-TModelClass: TypeAlias = Type[Any]
+TModelClass: TypeAlias = Type[object]
 
 
 class TableData(TypedDict):
@@ -70,8 +70,8 @@ class _RowORMModelMixin(_BaseRowDataClsMixin):
     """ORM row mixin."""
 
     __table_name__: ClassVar[str]
-    __relation_fields__: ClassVar[tuple[str]]
-    __column_fields__: ClassVar[tuple[str]]
+    __relation_fields__: ClassVar[tuple[str, ...]]
+    __column_fields__: ClassVar[tuple[str, ...]]
 
     def __init__(self, **kwargs: Any) -> None:
         """Initialize orm object."""

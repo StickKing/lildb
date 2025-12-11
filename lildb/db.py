@@ -32,7 +32,7 @@ _T = TypeVar("_T")
 
 if TYPE_CHECKING:
     from .orm import TModelClass
-    from .orm.utils import TableData
+    from .orm.model import TableData
     TRegistredTables: TypeAlias = defaultdict[Any, list[TableData]]
 
 
