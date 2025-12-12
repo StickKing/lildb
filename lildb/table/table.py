@@ -1,7 +1,6 @@
 """Module contain components for work with db table."""
 from __future__ import annotations
 
-from functools import cached_property
 from typing import TYPE_CHECKING
 from typing import Any
 from typing import Callable
@@ -37,42 +36,40 @@ __all__ = (
 class Table(Generic[TRow]):
     """Component for work with table."""
 
-    # __slots__ = (
-    #     "_name",
-    #     "query",
-    #     "select",
-    #     "insert",
-    #     "delete",
-    #     "update",
-    #     "use_datacls",
-    #     "c",
-    #     "columns",
-    #     "add",
-    #     "db",
-    #     "column_names",
-    # )
+    __slots__ = (
+        "_name",
+        "select",
+        "insert",
+        "delete",
+        "update",
+        "use_datacls",
+        "c",
+        "columns",
+        "db",
+        "column_names",
+        "primary_keys",
+        "row_cls",
+        "_query_obj",
+    )
 
-    row_cls: type[TRow] = RowDict  # type: ignore
-    table_name: str | None = None
+    # row_cls: type[TRow] = RowDict  # type: ignore
 
     def __init__(
         self,
         name: str | None = None,
         *,
         use_datacls: bool = False,
-        row_cls: type[TRow] | None = None,
+        row_cls: type[TRow] = RowDict,
     ) -> None:
         """Initialize."""
-        self.name = self.table_name or name
-        self.primary_keys = None
-        if self.name is None:
+        if name is None:
             msg = "Table name do not be None."
             raise ValueError(msg)
 
+        self._name = name
+        self.primary_keys = None
         self.use_datacls = use_datacls
-
-        if row_cls:
-            self.row_cls = row_cls
+        self.row_cls = row_cls
 
         # Operations
         self._query_obj = getattr(self, "query", Query)
@@ -127,8 +124,7 @@ class Table(Generic[TRow]):
         """
         return self.db.execute
 
-    @cached_property
-    def column_names(self) -> tuple[str, ...]:
+    def _get_column_names(self) -> tuple[str, ...]:
         """Fetch table column name."""
         stmt = "SELECT name, pk FROM PRAGMA_TABLE_INFO('{}');".format(
             self.name,
@@ -145,10 +141,10 @@ class Table(Generic[TRow]):
         self.primary_keys = tuple(primary_keys)
         return tuple(names)
 
-    @cached_property
-    def id_exist(self) -> bool:
-        """Check exist id column."""
-        return "id" in self.column_names
+    # @cached_property
+    # def id_exist(self) -> bool:
+    #     """Check exist id column."""
+    #     return "id" in self.column_names
 
     def all(self) -> list[TRow]:
         """Get all rows from table."""
@@ -161,8 +157,8 @@ class Table(Generic[TRow]):
     def __getitem__(self, index: int | str) -> TRow | None:
         """Get row item by id or index in list."""
         result = None
-        if not self.id_exist:
-            result = self.select()[index]
+        # if not self.id_exist:
+        #     result = self.select()[index]
         result = self.select(id=index)
         return result[0] if result else None
 
@@ -225,6 +221,7 @@ class Table(Generic[TRow]):
     def __call__(self, db: DB) -> None:
         """Prepare table obj."""
         self.db = db
+        self.column_names = self._get_column_names()
         if self.use_datacls and self.row_cls == RowDict:
             self.row_cls = make_row_data_cls(
                 self.name,
