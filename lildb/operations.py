@@ -799,10 +799,10 @@ class Query(TableOperation):
             row_cls = create_result_row(columns_name)
 
         offset = 0
-        self.limit(limit)
+        query = self.limit(limit)
         while True:
-            self.offset(offset * limit)
-            items = self._execute(self._create_query_str(), 0)
+            query2 = query.offset(offset * limit)
+            items = self._execute(query2._create_query_str(), 0)
             offset += 1
 
             if not items:
@@ -836,11 +836,14 @@ class Query(TableOperation):
         if self.table is None and table:
             self.table = table
             self._body = self._generate_column_names()
-        elif columns:
+            return self
+
+        if columns:
             self.columns = columns
             self._body = self._generate_column_names(columns)
-        else:
-            self._body = self._generate_column_names()
+            return self
+
+        self._body = self._generate_column_names()
         return self
 
 

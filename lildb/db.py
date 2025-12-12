@@ -24,11 +24,13 @@ from typing_extensions import dataclass_transform
 
 from .enumcls import ResultFetch
 from .operations import CreateTable
+from .operations import Query
 from .orm.model import create_table_and_data_cls_row
+from .table.column import Column
 from .table.table import Table
 
 
-_T = TypeVar("_T")
+T = TypeVar("T")
 
 if TYPE_CHECKING:
     from .orm import TModelClass
@@ -267,10 +269,10 @@ class DB:
     @dataclass_transform(kw_only_default=True)
     def register_table(
         cls,
-        model_cls: type[_T] = None,
+        model_cls: type[T] = None,
         *,
         path: str | Path | None = None,
-    ) -> type[_T] | Callable[[type[_T]], type[_T]]:
+    ) -> type[T] | Callable[[type[T]], type[T]]:
         """Registrate table.
 
         Args:
@@ -313,6 +315,60 @@ class DB:
             object_ids.append(table.add(*objects))
 
         return object_ids
+
+    def query(self, *columns_or_orm: Column | T) -> Query:
+        """Create query."""
+        query = None
+        models = []
+        columns = []
+
+        if not columns_or_orm:
+            msg = "Set columns or orm model"
+            raise ValueError(msg)
+
+        for col_orm in columns_or_orm:
+            if isinstance(col_orm, Column):
+                if query is None:
+                    table: Table = getattr(
+                        self,
+                        col_orm.table_name.lower(),
+                    )
+                    query = Query(table)
+                columns.append(col_orm)
+                continue
+
+            if query is None:
+                table: Table = getattr(
+                    self,
+                    col_orm.__table_name__,
+                )
+                query = Query(table)
+            models.append(col_orm)
+
+        if not columns and not models:
+            msg = "Incorrect type"
+            raise TypeError(msg)
+
+        if columns and models:
+            columns.extend(
+                getattr(model, column)
+                for model in models
+                for column in model.__column_fields__
+            )
+            return query(*columns)
+
+        if columns:
+            return query(*columns)
+
+        if len(models) > 1:
+            columns.extend(
+                getattr(model, column)
+                for model in models
+                for column in model.__column_fields__
+            )
+            return query(*columns)
+
+        return query()
 
 
 class Future:

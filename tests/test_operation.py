@@ -862,7 +862,7 @@ class TestQuery:
         # table = db_dict.ttable
 
         query = db.ttable.query()
-        query.where(name=None)
+        query = query.where(name=None)
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
@@ -870,7 +870,7 @@ class TestQuery:
         )
 
         query = db.ttable.query()
-        query.where(name=None, salary=10)
+        query = query.where(name=None, salary=10)
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
@@ -878,8 +878,8 @@ class TestQuery:
         )
 
         query = db.ttable.query()
-        query.where(name=None, salary=10)
-        query.where(condition="salary < 10", operator="OR")
+        query = query.where(name=None, salary=10)
+        query = query.where(condition="salary < 10", operator="OR")
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
@@ -888,8 +888,8 @@ class TestQuery:
         )
 
         query = db.ttable.query()
-        query.where(condition="salary < 10")
-        query.where(name=None, salary=10, filter_operator="OR")
+        query = query.where(condition="salary < 10")
+        query = query.where(name=None, salary=10, filter_operator="OR")
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
@@ -898,9 +898,9 @@ class TestQuery:
         )
 
         query = db.ttable.query()
-        query.where(condition="salary < 10")
-        query.where(name=None, salary=10, filter_operator="OR")
-        query.where(condition="name is not NULL")
+        query = query.where(condition="salary < 10")
+        query = query.where(name=None, salary=10, filter_operator="OR")
+        query = query.where(condition="name is not NULL")
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
@@ -909,9 +909,9 @@ class TestQuery:
         )
 
         query = db.ttable.query()
-        query.where(condition="salary < 10")
-        query.where(name=None, salary=10, filter_operator="OR")
-        query.where(salary=100)
+        query = query.where(condition="salary < 10")
+        query = query.where(name=None, salary=10, filter_operator="OR")
+        query = query.where(salary=100)
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
@@ -920,10 +920,10 @@ class TestQuery:
         )
 
         query = db.ttable.query()
-        query.where(condition="salary < 10")
-        query.where(name=None, salary=10, filter_operator="OR")
-        query.where(condition="name is not NULL")
-        query.where(salary=100, operator="OR")
+        query = query.where(condition="salary < 10")
+        query = query.where(name=None, salary=10, filter_operator="OR")
+        query = query.where(condition="name is not NULL")
+        query = query.where(salary=100, operator="OR")
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
@@ -933,10 +933,10 @@ class TestQuery:
         )
 
         query = db.ttable.query()
-        query.where(condition="     AND salary < 10")
-        query.where(name=None, salary=10, filter_operator="OR")
-        query.where(condition="or name is not NULL")
-        query.where(salary=100, operator="OR")
+        query = query.where(condition="     AND salary < 10")
+        query = query.where(name=None, salary=10, filter_operator="OR")
+        query = query.where(condition="or name is not NULL")
+        query = query.where(salary=100, operator="OR")
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
@@ -950,7 +950,7 @@ class TestQuery:
         db, _ = dbs
 
         query = db.ttable.query()
-        query.limit(10)
+        query = query.limit(10)
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
@@ -958,7 +958,7 @@ class TestQuery:
         )
 
         query = db.ttable.query()
-        query.limit(10).offset(10)
+        query = query.limit(10).offset(10)
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
@@ -966,7 +966,7 @@ class TestQuery:
         )
 
         query = db.ttable.query()
-        query.offset(10).limit(10)
+        query = query.offset(10).limit(10)
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
@@ -978,7 +978,7 @@ class TestQuery:
         db, _ = dbs
 
         query = db.ttable.query()
-        query.order_by("name")
+        query = query.order_by("name")
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
@@ -986,7 +986,7 @@ class TestQuery:
         )
 
         query = db.ttable.query()
-        query.order_by("name", "post", "salary")
+        query = query.order_by("name", "post", "salary")
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
@@ -994,7 +994,7 @@ class TestQuery:
         )
 
         query = db.ttable.query()
-        query.order_by(name="desc", post="asc", salary="desc")
+        query = query.order_by(name="desc", post="asc", salary="desc")
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
@@ -1003,7 +1003,7 @@ class TestQuery:
         )
 
         query = db.ttable.query()
-        query.order_by("name", post="asc", salary="desc")
+        query = query.order_by("name", post="asc", salary="desc")
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
@@ -1015,7 +1015,7 @@ class TestQuery:
         db, _ = dbs
 
         query = db.ttable.query()
-        query.group_by("name")
+        query = query.group_by("name")
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
@@ -1058,11 +1058,13 @@ class TestQuery:
         db, _ = dbs
 
         query: Query = db.ttable.query()
-        query.where(condition="     AND salary < 10").order_by("name")
-        query.where(name=None, salary=10, filter_operator="OR").offset(10)
-        query.where(condition="or name is not NULL").order_by("salary")
-        query.where(salary=100, operator="OR").limit(20)
-        query.group_by("name").having(condition="name = 'TEST'")
+        query = query.where(condition="     AND salary < 10").order_by("name")
+        query = query.where(name=None, salary=10, filter_operator="OR").offset(
+            10,
+        )
+        query = query.where(condition="or name is not NULL").order_by("salary")
+        query = query.where(salary=100, operator="OR").limit(20)
+        query = query.group_by("name").having(condition="name = 'TEST'")
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
@@ -1080,7 +1082,7 @@ class TestQuery:
         query = db_cls.ttable.query()
         assert query.first() is not None
 
-        query = db_dict.ttable.query().offset(10000)
+        query = db_dict.ttable.query().limit(1).offset(10000)
         assert query.first() is None
 
         query = db_cls.ttable.query(tb.c.id, tb.c.salary)

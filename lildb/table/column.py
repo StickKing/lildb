@@ -56,7 +56,7 @@ class Column:
     """Column."""
 
     __slots__ = (
-        "_table_name",
+        "table_name",
         "_column_name",
         "_full_column_name",
         "complete_label",
@@ -64,11 +64,11 @@ class Column:
 
     def __init__(self, table_name: str, column_name: str) -> None:
         """Initialize."""
-        self._table_name = table_name
+        self.table_name = table_name
         self._column_name = column_name
         self.complete_label = column_name
         self._full_column_name = "`{}`.{}".format(
-            self._table_name,
+            self.table_name,
             self._column_name,
         )
 
