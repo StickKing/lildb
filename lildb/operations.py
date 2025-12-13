@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from typing import Any
 from typing import Callable
 from typing import Generator
+from typing import Generic
 from typing import Iterable
 from typing import Literal
 from typing import MutableMapping
@@ -23,7 +24,6 @@ from .rows import create_result_row
 if TYPE_CHECKING:
     from .column_types import ForeignKey
     from .db import DB
-    from .rows import TRow
     from .sql import SQLBase
     from .table import Column
     from .table import Table
@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     TOperator = Literal["AND", "and", "OR", "or", ","]
     TQueryData = dict[str, int | bool | str | None]
     F = TypeVar("F", bound=Callable)
+
 
 __all__ = (
     "Query",
@@ -40,6 +41,9 @@ __all__ = (
     "Update",
     "CreateTable",
 )
+
+
+TRow = TypeVar("TRow")
 
 
 class Operation(ABC):
@@ -471,7 +475,7 @@ def generate_query(
     return wrap
 
 
-class Query(TableOperation):
+class Query(TableOperation, Generic[TRow]):
     """Create sql query with more params."""
 
     __slots__ = (
@@ -605,7 +609,7 @@ class Query(TableOperation):
         )
 
     @generate_query
-    def limit(self, limit_number: int) -> Query:
+    def limit(self, limit_number: int) -> Query[TRow]:
         """Use limit in sql query."""
         if not isinstance(limit_number, int):
             msg = f"Limit not be {type(limit_number)}"
@@ -614,7 +618,7 @@ class Query(TableOperation):
         return self
 
     @generate_query
-    def offset(self, offset_number: int) -> Query:
+    def offset(self, offset_number: int) -> Query[TRow]:
         """Use offset in sql query."""
         if not isinstance(offset_number, int):
             msg = f"Offset not be {type(offset_number)}"
@@ -623,7 +627,11 @@ class Query(TableOperation):
         return self
 
     @generate_query
-    def order_by(self, *args: str, **orders: Literal["asc", "desc"]) -> Query:
+    def order_by(
+        self,
+        *args: str,
+        **orders: Literal["asc", "desc"],
+    ) -> Query[TRow]:
         """Use order by in query."""
         order_types = {"asc", "desc"}
         if args:
@@ -702,7 +710,7 @@ class Query(TableOperation):
         filter_operator: TOperator = "AND",
         operator: TOperator = "AND",
         **filter_by: Any,
-    ) -> Query:
+    ) -> Query[TRow]:
         """Use where construction in sql query."""
         # TODO (stickking): check operator and remove from it ','
         # 0000
@@ -724,7 +732,7 @@ class Query(TableOperation):
         filter_operator: TOperator = "AND",
         operator: TOperator = "AND",
         **filter_by: Any,
-    ) -> Query:
+    ) -> Query[TRow]:
         """Use where construction in sql query."""
         # TODO (stickking): check operator and remove from it ','
         # 0000
@@ -739,7 +747,7 @@ class Query(TableOperation):
         return self
 
     @generate_query
-    def group_by(self, *args: str | Column) -> Query:
+    def group_by(self, *args: str | Column) -> Query[TRow]:
         """Use group by operation."""
         self._groups += tuple(map(str, args))
         return self
@@ -765,7 +773,7 @@ class Query(TableOperation):
             return 0
         return result[0][0]
 
-    def first(self) -> ABCRow | None:
+    def first(self) -> TRow | None:
         """Return first item from query."""
         self.limit(1)
         query = self._create_query_str()
@@ -782,7 +790,7 @@ class Query(TableOperation):
         size: int = 0,
         *,
         only_data: bool = False,
-    ) -> list[ABCRow]:
+    ) -> list[TRow]:
         """Return first item from query."""
         query = self._create_query_str()
         result = self._execute(query, size)
@@ -790,7 +798,7 @@ class Query(TableOperation):
             return result
         return self._as_list_row(result)
 
-    def generative_all(self, limit: int) -> Generator[ABCRow, Any, None]:
+    def generative_all(self, limit: int) -> Generator[TRow, Any, None]:
         """Return first item from query."""
         row_cls = self.table.row_cls
         columns_name = self.table.column_names

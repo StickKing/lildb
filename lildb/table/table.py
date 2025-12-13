@@ -6,6 +6,8 @@ from typing import Any
 from typing import Callable
 from typing import Generic
 from typing import Iterator
+from typing import Type
+from typing import TypeVar
 
 from ..enumcls import ResultFetch
 from ..operations import Delete
@@ -17,7 +19,6 @@ from ..orm.utils import contain_relation_objects
 from ..orm.utils import process_add_relation_objects
 from ..orm.utils import refresh_old_obj_by_new
 from ..rows import RowDict
-from ..rows import TRow
 from ..rows import make_row_data_cls
 from .column import Columns
 
@@ -28,12 +29,15 @@ if TYPE_CHECKING:
     from ..db import DB
 
 
+T = TypeVar("T")
+
+
 __all__ = (
     "Table",
 )
 
 
-class Table(Generic[TRow]):
+class Table(Generic[T]):
     """Component for work with table."""
 
     __slots__ = (
@@ -52,14 +56,16 @@ class Table(Generic[TRow]):
         "_query_obj",
     )
 
-    # row_cls: type[TRow] = RowDict  # type: ignore
-
     def __init__(
         self,
         name: str | None = None,
         *,
         use_datacls: bool = False,
-        row_cls: type[TRow] = RowDict,
+        row_cls: type[T] = RowDict,
+        query_cls: Type[Query] | None = None,
+        insert_cls: Type[Insert] | None = None,
+        delete_cls: Type[Delete] | None = None,
+        update_cls: Type[Update] | None = None,
     ) -> None:
         """Initialize."""
         if name is None:
@@ -72,11 +78,11 @@ class Table(Generic[TRow]):
         self.row_cls = row_cls
 
         # Operations
-        self._query_obj = getattr(self, "query", Query)
+        self._query_obj = query_cls if query_cls else Query
         self.select = getattr(self, "select", Select)(self)
-        self.insert = getattr(self, "insert", Insert)(self)
-        self.delete = getattr(self, "delete", Delete)(self)
-        self.update = getattr(self, "update", Update)(self)
+        self.insert = insert_cls(self) if insert_cls else Insert(self)
+        self.delete = delete_cls(self) if delete_cls else Delete(self)
+        self.update = update_cls(self) if update_cls else Update(self)
 
         # Sugar
         # self.add = self.insert
@@ -85,7 +91,7 @@ class Table(Generic[TRow]):
         self.columns = self.c
 
     @property
-    def query(self) -> Query:
+    def query(self) -> Query[T]:
         """Return new query object for this table."""
         return self._query_obj(self)
 
@@ -146,7 +152,7 @@ class Table(Generic[TRow]):
     #     """Check exist id column."""
     #     return "id" in self.column_names
 
-    def all(self) -> list[TRow]:
+    def all(self) -> list[T]:
         """Get all rows from table."""
         return self.select()
 
@@ -154,7 +160,7 @@ class Table(Generic[TRow]):
         """Iterate through the row list."""
         return self.select().__iter__()
 
-    def __getitem__(self, index: int | str) -> TRow | None:
+    def __getitem__(self, index: int | str) -> T | None:
         """Get row item by id or index in list."""
         result = None
         # if not self.id_exist:
@@ -162,7 +168,7 @@ class Table(Generic[TRow]):
         result = self.select(id=index)
         return result[0] if result else None
 
-    def get(self, **filter_by: str | int) -> TRow | None:
+    def get(self, **filter_by: str | int) -> T | None:
         """Get one row by filter."""
         result = self.select(size=1, **filter_by)
         return result[0] if result else None
@@ -179,7 +185,7 @@ class Table(Generic[TRow]):
         self,
         *objects: dict | Any,
         returning: bool = False,
-    ) -> None | Any:
+    ) -> None | T:
         """Add objects in table."""
         data = []
         objects_with_relation = []

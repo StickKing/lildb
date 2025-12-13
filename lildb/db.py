@@ -17,7 +17,9 @@ from typing import ClassVar
 from typing import Iterator
 from typing import MutableMapping
 from typing import Sequence
+from typing import Type
 from typing import TypeVar
+from typing import overload
 
 from typing_extensions import TypeAlias
 from typing_extensions import dataclass_transform
@@ -33,7 +35,6 @@ from .table.table import Table
 T = TypeVar("T")
 
 if TYPE_CHECKING:
-    from .orm import TModelClass
     from .orm.model import TableData
     TRegistredTables: TypeAlias = defaultdict[Any, list[TableData]]
 
@@ -265,20 +266,32 @@ class DB:
 
         self.connect.commit()
 
+    @dataclass_transform(kw_only_default=True)
+    @overload
+    def register_table(cls: Type[T]) -> Type[T]: ...
+
+    @dataclass_transform(kw_only_default=True)
+    @overload
+    def register_table(
+        *,
+        path: str | None = None,
+    ) -> Callable[[Type[T]], Type[T]]: ...
+
     @classmethod
     @dataclass_transform(kw_only_default=True)
     def register_table(
         cls,
-        model_cls: type[T] = None,
+        model_cls: Type[T] = None,
+        /,
         *,
         path: str | Path | None = None,
-    ) -> type[T] | Callable[[type[T]], type[T]]:
+    ) -> Type[T] | Callable[[Type[T]], Type[T]]:
         """Registrate table.
 
         Args:
             path (str | Path | None): path to datebase file
         """
-        def wrap(model_cls: TModelClass) -> TModelClass:
+        def wrap(model_cls: T) -> T:
             """Wrap func."""
             table_data_row_cls = create_table_and_data_cls_row(model_cls)
             correct_path = cls.normalize_path(Path(path))
@@ -316,7 +329,7 @@ class DB:
 
         return object_ids
 
-    def query(self, *columns_or_orm: Column | T) -> Query:
+    def query(self, *columns_or_orm: Column | Type[T]) -> Query[T]:
         """Create query."""
         query = None
         models = []
