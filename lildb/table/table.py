@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 from typing import Any
-from typing import Callable
 from typing import Generic
 from typing import Iterator
 from typing import Type
@@ -27,6 +26,7 @@ if TYPE_CHECKING:
     import sqlite3
 
     from ..db import DB
+    from ..orm.typings import TModel
 
 
 T = TypeVar("T")
@@ -54,6 +54,7 @@ class Table(Generic[T]):
         "primary_keys",
         "row_cls",
         "_query_obj",
+        "execute",
     )
 
     def __init__(
@@ -61,7 +62,7 @@ class Table(Generic[T]):
         name: str | None = None,
         *,
         use_datacls: bool = False,
-        row_cls: type[T] = RowDict,
+        row_cls: type[T] | None = None,
         query_cls: Type[Query] | None = None,
         insert_cls: Type[Insert] | None = None,
         delete_cls: Type[Delete] | None = None,
@@ -73,9 +74,9 @@ class Table(Generic[T]):
             raise ValueError(msg)
 
         self._name = name
-        self.primary_keys = None
+        self.primary_keys: tuple[str, ...] = ()
         self.use_datacls = use_datacls
-        self.row_cls = row_cls
+        self.row_cls = row_cls or RowDict
 
         # Operations
         self._query_obj = query_cls if query_cls else Query
@@ -110,25 +111,25 @@ class Table(Generic[T]):
         """Shortcut for cursor."""
         return self.db.connect.cursor()
 
-    @property
-    def execute(
-        self,
-    ) -> Callable[..., list[tuple] | None]:
-        """Shortcut for execute.
+    # @property
+    # def execute(
+    #     self,
+    # ) -> Callable[..., list[tuple] | None]:
+    #     """Shortcut for execute.
 
-        Args:
-            query (str): sql query
-            parameters (MutableMapping | Sequence): data for executing.
-            Defaults to ().
-            many (bool): flag for executemany operation. Defaults to False.
-            size (int | None): size for fetchmany operation. Defaults to None.
-            result (ResultFetch | None): enum for fetch func. Defaults to None.
+    #     Args:
+    #         query (str): sql query
+    #         parameters (MutableMapping | Sequence): data for executing.
+    #         Defaults to ().
+    #         many (bool): flag for executemany operation. Defaults to False.
+    #         size (int | None): size for fetchmany operation. Defaults to None.
+    #         result (ResultFetch | None): enum for fetch func. Defaults to None.
 
-        Returns:
-            list[Any] or None
+    #     Returns:
+    #         list[Any] or None
 
-        """
-        return self.db.execute
+    #     """
+    #     return self.db.execute
 
     def _get_column_names(self) -> tuple[str, ...]:
         """Fetch table column name."""
@@ -137,7 +138,7 @@ class Table(Generic[T]):
         )
         result = self.db.execute(stmt, result=ResultFetch.fetchall)
         names = []
-        primary_keys = []
+        primary_keys: list[str] = []
 
         for row in result:
             names.append(row[0])
@@ -156,22 +157,17 @@ class Table(Generic[T]):
         """Get all rows from table."""
         return self.select()
 
-    def __iter__(self) -> Iterator[Any]:
+    def __iter__(self) -> Iterator[T]:
         """Iterate through the row list."""
         return self.select().__iter__()
 
-    def __getitem__(self, index: int | str) -> T | None:
-        """Get row item by id or index in list."""
-        result = None
-        # if not self.id_exist:
-        #     result = self.select()[index]
-        result = self.select(id=index)
-        return result[0] if result else None
+    def __getitem__(self, index: int) -> T | None:
+        """Get row item by index in list."""
+        return self.query().all()[index]
 
-    def get(self, **filter_by: str | int) -> T | None:
+    def get(self, **filter_by: Any) -> T | None:
         """Get one row by filter."""
-        result = self.select(size=1, **filter_by)
-        return result[0] if result else None
+        return self.query().where(**filter_by).limit(1).first()
 
     def drop(self, *, init_tables: bool = True) -> None:
         """Drop this table."""
@@ -188,7 +184,7 @@ class Table(Generic[T]):
     ) -> None | T:
         """Add objects in table."""
         data = []
-        objects_with_relation = []
+        objects_with_relation: list[TModel] = []
         insert_obj = None
 
         for obj in objects:
@@ -227,6 +223,8 @@ class Table(Generic[T]):
     def __call__(self, db: DB) -> None:
         """Prepare table obj."""
         self.db = db
+        self.execute = db.execute
+
         self.column_names = self._get_column_names()
         if self.use_datacls and self.row_cls == RowDict:
             self.row_cls = make_row_data_cls(

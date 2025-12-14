@@ -802,11 +802,11 @@ class TestDelete:
         db_dict.ttable.delete(id=1)
         assert db_dict.ttable.get(id=1) is None
 
-        row = db_dict.ttable[2]
+        row = db_dict.ttable.get(id=2)
         row.delete()
         assert db_dict.ttable.get(id=2) is None
 
-        row = db_cls.ttable[3]
+        row = db_cls.ttable.get(id=3)
         row.delete()
         assert db_dict.ttable.get(id=3) is None
 

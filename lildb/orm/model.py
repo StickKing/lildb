@@ -79,7 +79,9 @@ class _RowORMModelMixin(_BaseRowDataClsMixin):
 
         self.table = kwargs.pop("table", None)
         self.changed_columns = set()
-        self._relation_object_add_funcs: defaultdict[list] = defaultdict(list)
+        self._relation_object_add_funcs: defaultdict[str, list] = (
+            defaultdict(list)
+        )
 
         column_fields = set(self.__column_fields__)
         column_fields.update(self.__relation_fields__)
@@ -153,7 +155,7 @@ def _get_table_columns(
     model_cls: TModelClass,
     table_columns: TTableColumns,
     foreign_keys: TForeignKeys,
-    relation_names: list,
+    relation_names: list[str],
 ) -> None:
     """Get table columns from cls."""
     annotations: dict[str, TColumn] = get_type_hints(model_cls)
@@ -231,7 +233,7 @@ def create_table_and_data_cls_row(
 
     table_columns: TTableColumns = {}
     foreign_keys: TForeignKeys = []
-    relation_names = []
+    relation_names: list[str] = []
     _get_table_columns(model_cls, table_columns, foreign_keys, relation_names)
 
     table_name = model_cls.__name__
@@ -257,8 +259,10 @@ def create_table_and_data_cls_row(
         {},
     )
 
-    ready_model_cls.__table_name__ = table_name.lower()
-    ready_model_cls.__relation_fields__ = tuple(relation_names)
-    ready_model_cls.__column_fields__ = tuple(table_columns.keys())
+    ready_model_cls.__table_name__ = table_name.lower()  # type: ignore
+    ready_model_cls.__relation_fields__ = tuple(relation_names)  # type: ignore
+    ready_model_cls.__column_fields__ = tuple(  # type: ignore
+        table_columns.keys()
+    )
 
     return table_data, ready_model_cls

@@ -161,7 +161,7 @@ def make_row_data_cls(
     create_orm_model: bool = False,
 ) -> type[Any]:
     """Create data cls row for the transmitted table."""
-    attributes = []
+    attributes: list[tuple[str, Any, Any]] = []
     init = True
 
     if bases is None:
@@ -169,7 +169,7 @@ def make_row_data_cls(
     else:
         bases = [_RowDataClsMixin, *bases]
 
-    attributes: list[tuple[str, Any, field]] = [
+    attributes = [
         (atr, Any, field(default=None))
         for atr in column_names
     ]
@@ -236,7 +236,9 @@ def dataclass_row(  # noqa: PLR0913
         cls.__annotations__["table"] = Any
         cls.__annotations__["changed_columns"] = set
         cls.table = field(default=None)  # type: ignore
-        cls.changed_columns = field(default_factory=lambda: set())
+        cls.changed_columns = field(  # type: ignore
+            default_factory=lambda: set(),
+        )
 
         # TODO (stickking): Remove _process_class and take wrap
         # 0000
@@ -268,6 +270,6 @@ def dataclass_row(  # noqa: PLR0913
     cls = wrap(cls)
 
     if repr is False:
-        cls.__repr__ = cls.__str__
+        cls.__repr__ = cls.__str__  # type: ignore
 
     return cls

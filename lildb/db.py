@@ -85,6 +85,7 @@ class DB:
         use_datacls: bool = False,
         debug: bool = False,
         auto_create_registred_tables: bool = True,
+        custom_tables: list[Table] | None = None,
         **connect_params: Any,
     ) -> None:
         """Initialize DB create connection and cursor."""
@@ -98,6 +99,7 @@ class DB:
         self.use_datacls = use_datacls
         self.table_names: set = set()
         self.create_table = getattr(self, "create_table", CreateTable)(self)
+        self._custom_tables = custom_tables or []
 
         if auto_create_registred_tables:
             self.create_registred_table()
@@ -114,16 +116,25 @@ class DB:
 
         custom_table_names = set()
 
+        for table in self._custom_tables:
+            custom_table_names.add(table.name.lower())
+            setattr(
+                self,
+                table.name.lower(),
+                table,
+            )
+            table(self)
+
         # table like class attributes
-        for attr in filter(
-            lambda i: not i.startswith("_"),
-            dir(self.__class__),
-        ):
-            custom_table = getattr(self, attr)
-            if not isinstance(custom_table, Table):
-                continue
-            custom_table_names.add(custom_table.name.lower())
-            custom_table(self)
+        # for attr in filter(
+        #     lambda i: not i.startswith("_"),
+        #     dir(self.__class__),
+        # ):
+        #     custom_table = getattr(self, attr)
+        #     if not isinstance(custom_table, Table):
+        #         continue
+        #     custom_table_names.add(custom_table.name.lower())
+        #     custom_table(self)
 
         # auto create exists table
         for name in result:
@@ -162,6 +173,28 @@ class DB:
         for table in self.tables:
             table.drop(init_tables=False)
         self.initialize_tables()
+
+    @overload
+    def execute(
+        self,
+        query: str,
+        parameters: MutableMapping | Sequence = (),
+        *,
+        many: bool = False,
+        size: int | None = None,
+        result: ResultFetch | None = ResultFetch,
+    ) -> list[Any]: ...
+
+    @overload
+    def execute(
+        self,
+        query: str,
+        parameters: MutableMapping | Sequence = (),
+        *,
+        many: bool = False,
+        size: int | None = None,
+        result: ResultFetch | None = None,
+    ) -> None: ...
 
     def execute(
         self,
@@ -243,7 +276,7 @@ class DB:
 
     def create_registred_table(self) -> None:
         """Create registred table."""
-        cls = self.__class__
+        # cls = self.__class__
         cursor = self.connect.cursor()
 
         for path, tables in self._registered_tables_data.items():
@@ -262,7 +295,8 @@ class DB:
                         use_datacls=True,
                         row_cls=row_cls,
                     )
-                    setattr(cls, table_name.lower(), table_obj)
+                    # setattr(cls, table_name.lower(), table_obj)
+                    self._custom_tables.append(table_obj)
 
         self.connect.commit()
 

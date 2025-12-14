@@ -14,10 +14,10 @@ from typing import Literal
 from typing import MutableMapping
 from typing import Sequence
 from typing import TypeVar
+from typing import overload
 
 from .column_types import BaseType
 from .enumcls import ResultFetch
-from .rows import ABCRow
 from .rows import create_result_row
 
 
@@ -131,23 +131,23 @@ class TableOperation(Operation, ABC):
         ...
 
 
-class Select(TableOperation):
+class Select(TableOperation, Generic[TRow]):
     """Component for select and filtered DB data."""
 
     __slots__ = ()
 
-    def query(self, columns: Iterable[str] | None = None) -> str:
+    def query(self, columns: Sequence[str] | None = None) -> str:
         """Fetch base query."""
         columns_str = self._generate_columns(columns)
         return f"SELECT {columns_str} FROM {self.table.name}"  # noqa: S608
 
     def _generate_columns(
         self,
-        columns: Iterable[str] | None = None,
+        columns: Sequence[str] | None = None,
         table: Table | None = None,
     ) -> str:
         """Create column str."""
-        columns_names = self.table.column_names
+        columns_names: Sequence[str] = self.table.column_names
         table_name = self.table.name
         if columns:
             columns_names = columns
@@ -162,7 +162,7 @@ class Select(TableOperation):
         parameters: TQueryData,
         *,
         size: int = 0,
-        columns: Iterable[str] | None = None,
+        columns: Sequence[str] | None = None,
         return_generator: bool = False,
     ) -> list[TRow]:
         """Execute with size."""
@@ -186,13 +186,13 @@ class Select(TableOperation):
 
     def _as_list_row(
         self,
-        items: Iterable[tuple[tuple[Any, ...]]],
+        items: Sequence[tuple[tuple[Any, ...]]],
         *,
-        columns: Iterable[str] | None = None,
+        columns: Sequence[str] | None = None,
     ) -> list[TRow]:
         """Create list rows."""
         row_cls = self.table.row_cls
-        columns_name = self.table.column_names
+        columns_name: Sequence[str] = self.table.column_names
         if columns:
             row_cls = create_result_row(columns)
             columns_name = columns
@@ -206,13 +206,13 @@ class Select(TableOperation):
 
     def _as_generator_row(
         self,
-        items: Iterable[tuple[tuple[Any, ...]]],
+        items: Sequence[tuple[tuple[Any, ...]]],
         *,
-        columns: Iterable[str] | None = None,
-    ) -> Generator[ABCRow, Any, None]:
+        columns: Sequence[str] | None = None,
+    ) -> Generator[TRow, Any, None]:
         """Create rows generator."""
         row_cls = self.table.row_cls
-        columns_name = self.table.column_names
+        columns_name: Sequence[str] = self.table.column_names
         if columns:
             row_cls = create_result_row(columns)
             columns_name = columns
@@ -227,8 +227,8 @@ class Select(TableOperation):
         filter_by: TQueryData,
         *,
         operator: TOperator = "AND",
-        columns: Iterable[str] | None = None,
-    ) -> list[TRow]:
+        columns: Sequence[str] | None = None,
+    ) -> str:
         """Filter data by filters value where key is
         column name value is content.
         """
@@ -243,7 +243,7 @@ class Select(TableOperation):
         *,
         size: int = 0,
         operator: TOperator = "AND",
-        columns: Iterable[str] | None = None,
+        columns: Sequence[str] | None = None,
         condition: str | None = None,
         return_generator: bool = False,
         **filter_by: int | str | None,
@@ -270,18 +270,18 @@ class Select(TableOperation):
         )
 
 
-class Insert(TableOperation):
+class Insert(TableOperation, Generic[TRow]):
     """Component for insert data in DB."""
 
     __slots__ = ()
 
     def _as_list_row(
         self,
-        items: Iterable[tuple[tuple[Any, ...]]],
-    ) -> list[ABCRow]:
+        items: Sequence[tuple[tuple[Any, ...]]],
+    ) -> list[TRow]:
         """Create list rows."""
         row_cls = self.table.row_cls
-        columns_name: Iterable[str] = self.table.column_names
+        columns_name: Sequence[str] = self.table.column_names
         return [
             row_cls(
                 table=self.table,
@@ -319,12 +319,30 @@ class Insert(TableOperation):
             returning_str,
         )
 
+    @overload
+    def __call__(
+        self,
+        data: TQueryData | Sequence[TQueryData],
+        *,
+        returning: Literal[False] = False,
+    ) -> None:
+        ...
+
+    @overload
+    def __call__(
+        self,
+        data: TQueryData | Sequence[TQueryData],
+        *,
+        returning: Literal[True] = True,
+    ) -> TRow:
+        ...
+
     def __call__(
         self,
         data: TQueryData | Sequence[TQueryData],
         *,
         returning: bool = False,
-    ) -> int | None:
+    ) -> TRow | None:
         """Insert-query for current table."""
         if not data:
             msg = "Data do not be empty."
@@ -335,7 +353,7 @@ class Insert(TableOperation):
 
         if returning is False:
             self.table.execute(self.query(data), data, many=True)
-            return
+            return None
 
         if len(data) > 1:
             msg = "Returning work with one item"
@@ -378,14 +396,14 @@ class Delete(TableOperation):
 
     def __call__(
         self,
-        id: int | Iterable[int] | None = None,  # noqa: A002
+        id: int | Sequence[int] | None = None,  # noqa: A002
         *,
         operator: TOperator = "AND",
         condition: str | None = None,
         **filter_by: int | str | None,
     ) -> None:
         """Delete-query for current table."""
-        if isinstance(id, Iterable):
+        if isinstance(id, Sequence):
             ids = tuple((id_,) for id_ in id)
             self.table.execute(self.query(), ids, many=True)  # type: ignore
             return
@@ -472,7 +490,7 @@ def generate_query(
         new_query_func = getattr(new_query, func.__name__).__wrapped__
         return new_query_func(new_query, *args, **kwargs)
 
-    return wrap
+    return wrap  # type: ignore
 
 
 class Query(TableOperation, Generic[TRow]):
@@ -496,11 +514,11 @@ class Query(TableOperation, Generic[TRow]):
     _groups: tuple[Any, ...]
     _limit: int
     _offset: int
-    columns: Iterable[str | SQLBase] | None
+    columns: tuple[SQLBase | Column, ...]
 
     def __init__(
         self,
-        table: Table | None = None,
+        table: Table[TRow] | None = None,
     ) -> None:
         """Initialize query and create it body
 
@@ -549,11 +567,11 @@ class Query(TableOperation, Generic[TRow]):
 
     def _as_list_row(
         self,
-        items: Iterable[tuple[tuple[Any, ...]]],
-    ) -> list[ABCRow]:
+        items: Sequence[tuple[tuple[Any, ...]]],
+    ) -> list[TRow]:
         """Create list rows."""
         row_cls = self.table.row_cls
-        columns_name: Iterable[str] = self.table.column_names
+        columns_name: Sequence[str] = self.table.column_names
         if self.columns:
             columns_name = self.result_row_column_names
             row_cls = create_result_row(columns_name)
@@ -583,7 +601,7 @@ class Query(TableOperation, Generic[TRow]):
 
     def _generate_column_names(
         self,
-        columns: Iterable[str | SQLBase] | None = None,
+        columns: tuple[SQLBase | Column, ...] | None = None,
     ) -> str:
         """Create column str."""
         columns_names = self.table.column_names  # type: ignore
@@ -785,12 +803,28 @@ class Query(TableOperation, Generic[TRow]):
 
     one = first
 
+    @overload
+    def all(
+        self,
+        size: int = 0,
+        *,
+        only_data: Literal[True] = True,
+    ) -> list[tuple[Any, ...]]: ...
+
+    @overload
+    def all(
+        self,
+        size: int = 0,
+        *,
+        only_data: Literal[False] = False,
+    ) -> list[TRow]: ...
+
     def all(
         self,
         size: int = 0,
         *,
         only_data: bool = False,
-    ) -> list[TRow]:
+    ) -> list[TRow] | list[tuple[Any, ...]]:
         """Return first item from query."""
         query = self._create_query_str()
         result = self._execute(query, size)
@@ -801,7 +835,7 @@ class Query(TableOperation, Generic[TRow]):
     def generative_all(self, limit: int) -> Generator[TRow, Any, None]:
         """Return first item from query."""
         row_cls = self.table.row_cls
-        columns_name = self.table.column_names
+        columns_name: Sequence[str] = self.table.column_names
         if self.columns:
             columns_name = self.result_row_column_names
             row_cls = create_result_row(columns_name)
@@ -839,7 +873,7 @@ class Query(TableOperation, Generic[TRow]):
         self._groups = ()
         self._limit = 0
         self._offset = 0
-        self.columns = None
+        self.columns = ()
 
         if self.table is None and table:
             self.table = table
@@ -880,7 +914,7 @@ class CreateTable(Operation):
         table_primary_keys = self._genarate_table_primary_keys(
             table_primary_key,
         )
-        foreign_keys = self._genatate_table_foreign_keys(
+        foreign_keys_str = self._genatate_table_foreign_keys(
             foreign_keys
         )
 
@@ -891,7 +925,7 @@ class CreateTable(Operation):
         # if table_primary_key and foreign_keys:
         #     foreign_keys = ", " + foreign_keys
 
-        pr_fr_keys = table_primary_keys + foreign_keys
+        pr_fr_keys = table_primary_keys + foreign_keys_str
 
         return f"{query} `{table_name}` ({columns}{pr_fr_keys})"
 
@@ -911,7 +945,7 @@ class CreateTable(Operation):
         foreign_keys: Sequence[ForeignKey] | None = None,
     ) -> str:
         """Create table foreign keys."""
-        if foreign_keys and isinstance(foreign_keys, Sequence):
+        if foreign_keys is not None and isinstance(foreign_keys, Sequence):
             return ", " + ", ".join(
                 key()
                 for key in foreign_keys

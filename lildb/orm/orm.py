@@ -5,8 +5,10 @@ from typing import TYPE_CHECKING
 from typing import Any
 from typing import Generic
 from typing import Literal
+from typing import Protocol
 from typing import Sequence
 from typing import TypeVar
+from typing import cast
 from typing import overload
 
 from ..column_types import DataClassJson
@@ -17,6 +19,7 @@ from ..column_types import Json
 from ..column_types import TColumnType
 from ..column_types import Time
 from ..table.column import Column
+from .typings import TModel
 
 
 if TYPE_CHECKING:
@@ -25,10 +28,11 @@ if TYPE_CHECKING:
     from ..table.table import Table
 
 
-TAnyType = TypeVar("TAnyType")
+T = TypeVar("T", bound=TModel)
+TAnyType = TypeVar("TAnyType", covariant=True)
 
 
-class TColumn(Generic[TAnyType]):
+class TColumn(Protocol, Generic[TAnyType]):
     """Typed Column."""
 
     __slots__ = ()
@@ -37,37 +41,30 @@ class TColumn(Generic[TAnyType]):
     def __get__(
         self,
         instance: None,
-        owner: Any,
+        owner: type[Any],
     ) -> Column:
         ...
 
     @overload
     def __get__(
         self,
-        instance: object,
-        owner: Any,
+        instance: Any,
+        owner: type[Any],
     ) -> TAnyType:
         ...
 
 
-class DBTableGetterMixin:
+class DBTableGetterMixin(Generic[T]):
     """Mixin to get db or table from current row instance."""
 
     __slots__ = ()
 
-    def _get_db(self, instance: ABCRow) -> DB:
+    def _get_db(self, instance: T) -> DB:
         """Get instance db or None."""
         if instance.table:
             return instance.table.db
 
         msg = f"{instance} is not linked to the database"
-        raise AssertionError(msg)
-
-    def _get_table(self, db: DB) -> Table:
-        table: Table | None = getattr(db, self.second_table.lower(), None)
-        if table:
-            return table
-        msg = f"{self.second_table} not found"
         raise AssertionError(msg)
 
     def _get_table_by_name(self, db: DB, table_name: str) -> Table:
@@ -108,9 +105,25 @@ class MColumn(TColumn[TAnyType]):
         table_name = owner.__name__
         self._column = Column(table_name, column_name)
 
+    @overload
     def __get__(
         self,
-        instance: ABCRow | None,
+        instance: None,
+        owner: type[Any],
+    ) -> Column:
+        ...
+
+    @overload
+    def __get__(
+        self,
+        instance: Any,
+        owner: type[Any],
+    ) -> TAnyType:
+        ...
+
+    def __get__(
+        self,
+        instance: Any,
         owner: type[Any],
     ) -> TAnyType | Column:
         if instance is None:
@@ -141,7 +154,7 @@ class MColumn(TColumn[TAnyType]):
         )
 
 
-class RelationForeignKey(ForeignKey, TColumn, DBTableGetterMixin):
+class RelationForeignKey(ForeignKey, DBTableGetterMixin, Generic[TAnyType]):
     """Relation foreign key."""
 
     __slots__ = ()
@@ -159,9 +172,9 @@ class RelationForeignKey(ForeignKey, TColumn, DBTableGetterMixin):
 
     def __get__(
         self,
-        instance: ABCRow | None,
+        instance: Any,
         owner: type[Any],
-    ) -> TAnyType:
+    ) -> TAnyType | None:
         """Returns a relation object by foreign key."""
         if instance is None:
             msg = "Instance not found"
@@ -206,7 +219,7 @@ class RelationForeignKey(ForeignKey, TColumn, DBTableGetterMixin):
         setattr(instance, self.column, ref_table_value)
 
 
-class Relation(TColumn, DBTableGetterMixin):
+class Relation(DBTableGetterMixin[T]):
     """
     Relation is a descriptor for dealing
     with one-to-many or many-to-many relationships.
@@ -232,10 +245,10 @@ class Relation(TColumn, DBTableGetterMixin):
         self._foreign_key_to_relation_table = foreign_key_to_relation_table
         self._cascade = cascade
 
-    def _one_many(self, instance: ABCRow) -> list[ABCRow]:
+    def _one_many(self, instance: T) -> list[T]:
         """One many."""
         db = self._get_db(instance)
-        second_table = self._get_table(db)
+        second_table = self._get_table_by_name(db, self.second_table)
         second_orm_model = db.orm_classes[self.second_table]
 
         second_tb_foreign_key: RelationForeignKey = second_orm_model.__dict__[
@@ -256,18 +269,19 @@ class Relation(TColumn, DBTableGetterMixin):
             foreign_key_column == instance_ref_column_value,
         ).all()
 
-    def _many_to_many(self, instance: ABCRow) -> list[ABCRow]:
+    def _many_to_many(self, instance: T) -> list[T]:
         """Many to many."""
         db = self._get_db(instance)
 
-        m2m_table = self._get_table(db)
+        m2m_table = self._get_table_by_name(db, self.second_table)
         m2m_orm_model = db.orm_classes[self.second_table]
 
         current_tb_foreign_key: RelationForeignKey = m2m_orm_model.__dict__[
             self._foreign_key_to_current_table
         ]
+
         relation_tb_foreign_key: RelationForeignKey = m2m_orm_model.__dict__[
-            self._foreign_key_to_relation_table
+            cast(str, self._foreign_key_to_relation_table)
         ]
 
         relation_table = self._get_table_by_name(
@@ -305,7 +319,7 @@ class Relation(TColumn, DBTableGetterMixin):
         if not relation_ids:
             return []
 
-        rel_column: Column = getattr(
+        rel_column = getattr(
             rel_orm_model,
             relation_tb_foreign_key.reference_column,
         )
@@ -315,14 +329,14 @@ class Relation(TColumn, DBTableGetterMixin):
     def _prepare_relation_objects(
         self,
         relation_table: Table,
-        objects: list[ABCRow],
-    ) -> list[ABCRow]:
+        objects: Sequence[T],
+    ) -> list[T]:
         """Prepare relation objects."""
         exists_object = [obj for obj in objects if obj.table is not None]
         new_objects = [obj for obj in objects if obj.table is None]
 
         added_objects = [
-            relation_table.add(new_obj, returning=True)
+            cast(Any, relation_table.add(new_obj, returning=True))
             for new_obj in new_objects
         ]
 
@@ -331,7 +345,7 @@ class Relation(TColumn, DBTableGetterMixin):
     def _add_new_one_many_object(
         self,
         instance: Any,
-        objects: list[ABCRow],
+        objects: Sequence[T],
     ) -> None:
         """Add new relation objects."""
         db = self._get_db(instance)
@@ -371,7 +385,7 @@ class Relation(TColumn, DBTableGetterMixin):
     def _add_new_many_to_many_object(
         self,
         instance: Any,
-        objects: ABCRow,
+        objects: Sequence[T],
     ) -> None:
         """Add new relation objects."""
         db = self._get_db(instance)
@@ -383,7 +397,7 @@ class Relation(TColumn, DBTableGetterMixin):
             self._foreign_key_to_current_table
         ]
         relation_tb_foreign_key: RelationForeignKey = m2m_orm_model.__dict__[
-            self._foreign_key_to_relation_table
+            cast(str, self._foreign_key_to_relation_table)
         ]
         relation_table = self._get_table_by_name(
             db,
@@ -416,26 +430,26 @@ class Relation(TColumn, DBTableGetterMixin):
 
     def __get__(
         self,
-        instance: ABCRow | None,
+        instance: T | None,
         owner: type[Any],
-    ) -> list[TAnyType]:
+    ) -> list[T]:
         """Returns a relation objects by foreign keys."""
         if instance is None:
             msg = "Instance not found"
             raise AttributeError(msg)
 
-        if self._foreign_key_to_relation_table:
+        if self._foreign_key_to_relation_table is not None:
             return self._many_to_many(instance)
 
         return self._one_many(instance)
 
     def __set__(
         self,
-        instance: ABCRow,
-        value: Sequence[ABCRow],
+        instance: T,
+        value: Sequence[T],
     ) -> None:
         """Set new relation objects."""
-        if self._foreign_key_to_relation_table:
+        if self._foreign_key_to_relation_table is not None:
             getattr(
                 instance,
                 "_relation_object_add_funcs",

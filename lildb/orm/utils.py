@@ -10,19 +10,19 @@ from typing import TypeVar
 
 if TYPE_CHECKING:
     from ..table import Table
-    from .model import _RowORMModelMixin
+    from .typings import TModel
     TModelClass = TypeVar("TModelClass", bound=type[Any])
 
 
-def contain_relation_objects(orm_object: _RowORMModelMixin) -> bool:
+def contain_relation_objects(orm_object: TModel) -> bool:
     """Check object contain new relation objects."""
     return len(orm_object._relation_object_add_funcs) > 0
 
 
 def refresh_old_obj_by_new(
     table: Table,
-    old_orm_object: _RowORMModelMixin,
-    new_orm_object: _RowORMModelMixin,
+    old_orm_object: TModel,
+    new_orm_object: TModel,
 ) -> None:
     """Move relation funcs to other object."""
     for name in table.column_names:
@@ -35,7 +35,7 @@ def refresh_old_obj_by_new(
 
 
 def process_add_relation_objects(
-    orm_object: _RowORMModelMixin,
+    orm_object: TModel,
     ref_type: Literal["Relation", "RelationForeignKey"] | None = None,
 ) -> None:
     """Add relation object."""

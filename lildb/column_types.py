@@ -48,10 +48,26 @@ __all__ = (
 )
 
 
-TColumnType = TypeVar("TColumnType", bound="BaseType")
 TNumberType = TypeVar("TNumberType", bound="Number")
 TDateTimeDBFormat: TypeAlias = Literal["timestamp", "ISO"]
 TDateDBFormat: TypeAlias = Literal["timestamp", "ISO", "ordinal"]
+
+
+class TColumnType(Protocol):
+    """Column type."""
+
+    __slots__ = ()
+
+    def __str__(self) -> str:
+        """String view."""
+        ...
+
+    def to_db(self, value: Any) -> Any:
+        """Serialize data to db type."""
+        ...
+
+    def to_python(self, value: Any) -> Any:
+        """Serialize data to python type."""
 
 
 class TBaseTypeKwargs(TypedDict):
@@ -249,7 +265,7 @@ class Real(BaseType):
 
     def __init__(
         self,
-        default: TNumberType | None = None,
+        default: float | int | None = None,
         **kwargs: Unpack[TBaseTypeKwargs],
     ) -> None:
         """Initialize base params for REAL.
