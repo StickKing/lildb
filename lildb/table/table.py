@@ -5,8 +5,10 @@ from typing import TYPE_CHECKING
 from typing import Any
 from typing import Generic
 from typing import Iterator
+from typing import Literal
 from typing import Type
 from typing import TypeVar
+from typing import cast
 
 from ..enumcls import ResultFetch
 from ..operations import Delete
@@ -64,7 +66,7 @@ class Table(Generic[T]):
         use_datacls: bool = False,
         row_cls: type[T] | None = None,
         query_cls: Type[Query] | None = None,
-        insert_cls: Type[Insert] | None = None,
+        insert_cls: Type[Insert[T]] | None = None,
         delete_cls: Type[Delete] | None = None,
         update_cls: Type[Update] | None = None,
     ) -> None:
@@ -76,12 +78,12 @@ class Table(Generic[T]):
         self._name = name
         self.primary_keys: tuple[str, ...] = ()
         self.use_datacls = use_datacls
-        self.row_cls = row_cls or RowDict
+        self.row_cls = cast(T, row_cls or RowDict)
 
         # Operations
         self._query_obj = query_cls if query_cls else Query
-        self.select = getattr(self, "select", Select)(self)
-        self.insert = insert_cls(self) if insert_cls else Insert(self)
+        self.select: Select[T] = Select(self)
+        self.insert = insert_cls(self) if insert_cls else Insert[T](self)
         self.delete = delete_cls(self) if delete_cls else Delete(self)
         self.update = update_cls(self) if update_cls else Update(self)
 
@@ -161,7 +163,7 @@ class Table(Generic[T]):
         """Iterate through the row list."""
         return self.select().__iter__()
 
-    def __getitem__(self, index: int) -> T | None:
+    def __getitem__(self, index: int) -> T:
         """Get row item by index in list."""
         return self.query().all()[index]
 
@@ -202,7 +204,10 @@ class Table(Generic[T]):
             data.append(obj.get_row_data_as_dict())
 
         if data:
-            insert_obj = self.insert(data, returning=returning)
+            insert_obj = self.insert(
+                data,
+                returning=cast(Literal[True, False], returning),
+            )
 
         new_obj = None
         # too slow
@@ -227,7 +232,10 @@ class Table(Generic[T]):
 
         self.column_names = self._get_column_names()
         if self.use_datacls and self.row_cls == RowDict:
-            self.row_cls = make_row_data_cls(
-                self.name,
-                self.column_names,
+            self.row_cls = cast(
+                T,
+                make_row_data_cls(
+                    self.name,
+                    self.column_names,
+                ),
             )

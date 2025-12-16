@@ -526,7 +526,7 @@ class Query(TableOperation, Generic[TRow]):
             rowcls (ABCRow | None, optional): row cls for existents table.
                 Defaults to None.
         """
-        self.table = table
+        self.table = table  # type: ignore
 
     def _create_query_str(self) -> str:
         """Create sql query with all existent attrs."""
@@ -808,16 +808,16 @@ class Query(TableOperation, Generic[TRow]):
         self,
         size: int = 0,
         *,
-        only_data: Literal[True] = True,
-    ) -> list[tuple[Any, ...]]: ...
+        only_data: Literal[False] = False,
+    ) -> list[TRow]: ...
 
     @overload
     def all(
         self,
         size: int = 0,
         *,
-        only_data: Literal[False] = False,
-    ) -> list[TRow]: ...
+        only_data: Literal[True] = True,
+    ) -> list[tuple[Any, ...]]: ...
 
     def all(
         self,
@@ -856,7 +856,7 @@ class Query(TableOperation, Generic[TRow]):
                     **dict(zip(columns_name, item)),
                 )
 
-    def __iter__(self) -> Iterable:
+    def __iter__(self) -> Iterable[TRow]:
         """Iteration by data."""
         return iter(self.all())
 
@@ -864,7 +864,7 @@ class Query(TableOperation, Generic[TRow]):
         self,
         *columns: SQLBase | Column,
         table: Table | None = None,
-    ) -> Query:
+    ) -> Query[TRow]:
         """Initialize base args and create query body."""
         self._body = ""
         self._filters = ()

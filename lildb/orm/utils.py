@@ -21,8 +21,8 @@ def contain_relation_objects(orm_object: TModel) -> bool:
 
 def refresh_old_obj_by_new(
     table: Table,
-    old_orm_object: TModel,
-    new_orm_object: TModel,
+    old_orm_object: Any,
+    new_orm_object: Any,
 ) -> None:
     """Move relation funcs to other object."""
     for name in table.column_names:
@@ -35,7 +35,7 @@ def refresh_old_obj_by_new(
 
 
 def process_add_relation_objects(
-    orm_object: TModel,
+    orm_object: Any,
     ref_type: Literal["Relation", "RelationForeignKey"] | None = None,
 ) -> None:
     """Add relation object."""
