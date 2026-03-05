@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import uuid
+from pathlib import Path
 from random import randint
 from typing import Any
 from typing import MutableMapping
@@ -22,8 +23,9 @@ from lildb.sql import func
 @pytest.fixture(scope="package")
 def dbs() -> tuple[DB, ...]:
     """Create db objects."""
-    db_dict = DB("test.db")
-    DB._instances.pop("test.db")
+    test_db_path = DB.normalize_path(Path("test.db"))
+    db_dict = DB(test_db_path)
+    DB._instances.pop(test_db_path)
     db_dict.drop_tables()
     db_dict.create_table("ttable", ["id", "name", "post", "salary"])
     db_cls = DB("test.db", use_datacls=True)
@@ -43,23 +45,29 @@ class TestCreateTable:
         *,
         if_not_exists: bool = True,
     ) -> str:
-        columns = db.create_table._generate_columns(
-            columns,
-        )
-        table_primary_keys = db.create_table._genarate_table_primary_keys(
-            table_primary_key,
-        )
-        foreign_keys = db.create_table._genatate_table_foreign_keys(
-            foreign_keys
-        )
-        query = db.create_table.query(
+        # columns = db.create_table._generate_columns(
+        #     columns,
+        # )
+        # table_primary_keys = db.create_table._genarate_table_primary_keys(
+        #     table_primary_key,
+        # )
+        # foreign_keys = db.create_table._genatate_table_foreign_keys(
+        #     foreign_keys
+        # )
+        # query = db.create_table.query(
+        #     table_name,
+        #     columns,
+        #     table_primary_keys,
+        #     foreign_keys,
+        #     if_not_exists=if_not_exists,
+        # )
+        return db.create_table.query(
             table_name,
             columns,
-            table_primary_keys,
+            table_primary_key,
             foreign_keys,
             if_not_exists=if_not_exists,
-        )
-        return query.replace("  ", " ")
+        ).replace("  ", " ")
 
     def test_simple(self, dbs: tuple[DB, ...]) -> None:
         """
@@ -186,10 +194,10 @@ class TestCreateTable:
             db,
             "Person",
             {
-                "id": Integer(),
-                "name": Text(),
-                "salary": Real(),
-                "img": Blob(),
+                "id": Integer(nullable=False),
+                "name": Text(nullable=False),
+                "salary": Real(nullable=False),
+                "img": Blob(nullable=False),
             }
         )
         assert query == (
@@ -204,10 +212,10 @@ class TestCreateTable:
             db,
             "Person",
             {
-                "id": Integer(default=10),
-                "name": Text(default='David'),
-                "salary": Real(default=150.5),
-                "img": Blob(),
+                "id": Integer(default=10, nullable=False),
+                "name": Text(default='David', nullable=False),
+                "salary": Real(default=150.5, nullable=False),
+                "img": Blob(nullable=False),
             }
         )
         assert query == (
@@ -222,10 +230,10 @@ class TestCreateTable:
             db,
             "Person",
             {
-                "id": Integer(unique=True),
-                "name": Text(unique=True),
-                "salary": Real(unique=True),
-                "img": Blob(unique=True),
+                "id": Integer(unique=True, nullable=False),
+                "name": Text(unique=True, nullable=False),
+                "salary": Real(unique=True, nullable=False),
+                "img": Blob(unique=True, nullable=False),
             }
         )
         assert query == (
@@ -240,10 +248,10 @@ class TestCreateTable:
             db,
             "Person",
             {
-                "id": Integer(nullable=True),
-                "name": Text(nullable=True),
-                "salary": Real(nullable=True),
-                "img": Blob(nullable=True),
+                "id": Integer(),
+                "name": Text(),
+                "salary": Real(),
+                "img": Blob(),
             }
         )
         assert query == (
@@ -258,7 +266,7 @@ class TestCreateTable:
             db,
             "Person",
             {
-                "id": Integer(primary_key=True, autoincrement=True),
+                "id": Integer(primary_key=True, autoincrement=True, nullable=False),
                 "name": Text(nullable=True, unique=True, default='David'),
                 "salary": Real(nullable=True, unique=True, default=100.5),
                 "img": Blob(nullable=True, unique=True),
@@ -279,10 +287,10 @@ class TestCreateTable:
             db,
             "Person",
             {
-                "id": Integer(),
-                "name": Text(),
-                "salary": Real(),
-                "img": Blob(),
+                "id": Integer(nullable=False),
+                "name": Text(nullable=False),
+                "salary": Real(nullable=False),
+                "img": Blob(nullable=False),
             },
             table_primary_key=("id",),
         )
@@ -299,10 +307,10 @@ class TestCreateTable:
             db,
             "Person",
             {
-                "id": Integer(default=10),
-                "name": Text(default='David'),
-                "salary": Real(default=150.5),
-                "img": Blob(),
+                "id": Integer(default=10, nullable=False),
+                "name": Text(default='David', nullable=False),
+                "salary": Real(default=150.5, nullable=False),
+                "img": Blob(nullable=False),
             },
             table_primary_key=("id",),
         )
@@ -319,10 +327,10 @@ class TestCreateTable:
             db,
             "Person",
             {
-                "id": Integer(unique=True),
-                "name": Text(unique=True),
-                "salary": Real(unique=True),
-                "img": Blob(unique=True),
+                "id": Integer(unique=True, nullable=False),
+                "name": Text(unique=True, nullable=False),
+                "salary": Real(unique=True, nullable=False),
+                "img": Blob(unique=True, nullable=False),
             },
             table_primary_key=("id", "name"),
         )
@@ -359,7 +367,7 @@ class TestCreateTable:
             db,
             "Person",
             {
-                "id": Integer(),
+                "id": Integer(nullable=False),
                 "name": Text(nullable=True, unique=True, default='David'),
                 "salary": Real(nullable=True, unique=True, default=100.5),
                 "img": Blob(nullable=True, unique=True),
@@ -382,11 +390,11 @@ class TestCreateTable:
             db,
             "Person",
             {
-                "id": Integer(),
-                "name": Text(),
-                "salary": Real(),
-                "img": Blob(),
-                "any_id": Integer(),
+                "id": Integer(nullable=False),
+                "name": Text(nullable=False),
+                "salary": Real(nullable=False),
+                "img": Blob(nullable=False),
+                "any_id": Integer(nullable=False),
             },
             foreign_keys=(ForeignKey("any_id", "Any", "id"),),
         )
@@ -404,11 +412,11 @@ class TestCreateTable:
             db,
             "Person",
             {
-                "id": Integer(default=10),
-                "name": Text(default='David'),
-                "salary": Real(default=150.5),
-                "img": Blob(),
-                "any_id": Integer(),
+                "id": Integer(default=10, nullable=False),
+                "name": Text(default='David', nullable=False),
+                "salary": Real(default=150.5, nullable=False),
+                "img": Blob(nullable=False),
+                "any_id": Integer(nullable=False),
             },
             foreign_keys=(ForeignKey("any_id", "Any", "id"),),
         )
@@ -426,11 +434,11 @@ class TestCreateTable:
             db,
             "Person",
             {
-                "id": Integer(unique=True),
-                "name": Text(unique=True),
-                "salary": Real(unique=True),
-                "img": Blob(unique=True),
-                "any_id": Integer(),
+                "id": Integer(unique=True, nullable=False),
+                "name": Text(unique=True, nullable=False),
+                "salary": Real(unique=True, nullable=False),
+                "img": Blob(unique=True, nullable=False),
+                "any_id": Integer(nullable=False),
             },
             foreign_keys=(ForeignKey("any_id", "Any", "id"),),
         )
@@ -452,7 +460,7 @@ class TestCreateTable:
                 "name": Text(nullable=True),
                 "salary": Real(nullable=True),
                 "img": Blob(nullable=True),
-                "any_id": Integer(),
+                "any_id": Integer(nullable=False),
             },
             foreign_keys=(ForeignKey("any_id", "Any", "id"),),
         )
@@ -474,7 +482,7 @@ class TestCreateTable:
                 "name": Text(nullable=True, unique=True, default='David'),
                 "salary": Real(nullable=True, unique=True, default=100.5),
                 "img": Blob(nullable=True, unique=True),
-                "any_id": Integer(),
+                "any_id": Integer(nullable=False),
             },
             foreign_keys=(ForeignKey("any_id", "Any", "id"),),
         )
@@ -495,11 +503,11 @@ class TestCreateTable:
             db,
             "Person",
             {
-                "id": Integer(),
-                "name": Text(),
-                "salary": Real(),
-                "img": Blob(),
-                "any_id": Integer(),
+                "id": Integer(nullable=False),
+                "name": Text(nullable=False),
+                "salary": Real(nullable=False),
+                "img": Blob(nullable=False),
+                "any_id": Integer(nullable=False),
             },
             table_primary_key=("id",),
             foreign_keys=(ForeignKey("any_id", "Any", "id"),),
@@ -519,11 +527,11 @@ class TestCreateTable:
             db,
             "Person",
             {
-                "id": Integer(default=10),
-                "name": Text(default='David'),
-                "salary": Real(default=150.5),
-                "img": Blob(),
-                "any_id": Integer(),
+                "id": Integer(default=10, nullable=False),
+                "name": Text(default='David', nullable=False),
+                "salary": Real(default=150.5, nullable=False),
+                "img": Blob(nullable=False),
+                "any_id": Integer(nullable=False),
             },
             table_primary_key=("id",),
             foreign_keys=(ForeignKey("any_id", "Any", "id"),),
@@ -543,11 +551,11 @@ class TestCreateTable:
             db,
             "Person",
             {
-                "id": Integer(unique=True),
-                "name": Text(unique=True),
-                "salary": Real(unique=True),
-                "img": Blob(unique=True),
-                "any_id": Integer(),
+                "id": Integer(unique=True, nullable=False),
+                "name": Text(unique=True, nullable=False),
+                "salary": Real(unique=True, nullable=False),
+                "img": Blob(unique=True, nullable=False),
+                "any_id": Integer(nullable=False),
             },
             table_primary_key=("id", "name"),
             foreign_keys=(ForeignKey("any_id", "Any", "id"),),
@@ -571,7 +579,7 @@ class TestCreateTable:
                 "name": Text(nullable=True),
                 "salary": Real(nullable=True),
                 "img": Blob(nullable=True),
-                "any_id": Integer(),
+                "any_id": Integer(nullable=False),
             },
             table_primary_key=("id", "name"),
             foreign_keys=(ForeignKey("any_id", "Any", "id"),),
@@ -595,8 +603,8 @@ class TestCreateTable:
                 "name": Text(nullable=True, unique=True, default='David'),
                 "salary": Real(nullable=True, unique=True, default=100.5),
                 "img": Blob(nullable=True, unique=True),
-                "any_id": Integer(),
-                "any_id2": Integer(),
+                "any_id": Integer(nullable=False),
+                "any_id2": Integer(nullable=False),
             },
             table_primary_key=("id", "name", "salary"),
             foreign_keys=(
@@ -654,7 +662,7 @@ class TestInsert:
             for id_ in range(2, 21)
         ]
         cursor = db_dict.connect.cursor()
-        db_dict.ttable.add(new_rows)
+        db_dict.ttable.add(*new_rows)
 
         stmt = "select * from ttable where id > 1"
         rows = cursor.execute(stmt).fetchmany()
@@ -794,11 +802,11 @@ class TestDelete:
         db_dict.ttable.delete(id=1)
         assert db_dict.ttable.get(id=1) is None
 
-        row = db_dict.ttable[2]
+        row = db_dict.ttable.get(id=2)
         row.delete()
         assert db_dict.ttable.get(id=2) is None
 
-        row = db_cls.ttable[3]
+        row = db_cls.ttable.get(id=3)
         row.delete()
         assert db_dict.ttable.get(id=3) is None
 
@@ -854,85 +862,85 @@ class TestQuery:
         # table = db_dict.ttable
 
         query = db.ttable.query()
-        query.where(name=None)
+        query = query.where(name=None)
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable WHERE name is NULL"
+            "`ttable`.salary FROM `ttable` WHERE name is NULL"
         )
 
         query = db.ttable.query()
-        query.where(name=None, salary=10)
+        query = query.where(name=None, salary=10)
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable WHERE name is NULL AND salary = 10"
+            "`ttable`.salary FROM `ttable` WHERE name is NULL AND salary = 10"
         )
 
         query = db.ttable.query()
-        query.where(name=None, salary=10)
-        query.where(condition="salary < 10", operator="OR")
+        query = query.where(name=None, salary=10)
+        query = query.where(condition="salary < 10", operator="OR")
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable WHERE name is NULL AND salary = 10 "
+            "`ttable`.salary FROM `ttable` WHERE name is NULL AND salary = 10 "
             "OR salary < 10"
         )
 
         query = db.ttable.query()
-        query.where(condition="salary < 10")
-        query.where(name=None, salary=10, filter_operator="OR")
+        query = query.where(condition="salary < 10")
+        query = query.where(name=None, salary=10, filter_operator="OR")
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable WHERE salary < 10 OR "
+            "`ttable`.salary FROM `ttable` WHERE salary < 10 OR "
             "name is NULL AND salary = 10"
         )
 
         query = db.ttable.query()
-        query.where(condition="salary < 10")
-        query.where(name=None, salary=10, filter_operator="OR")
-        query.where(condition="name is not NULL")
+        query = query.where(condition="salary < 10")
+        query = query.where(name=None, salary=10, filter_operator="OR")
+        query = query.where(condition="name is not NULL")
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable WHERE salary < 10 OR "
+            "`ttable`.salary FROM `ttable` WHERE salary < 10 OR "
             "name is NULL AND salary = 10 AND name is not NULL"
         )
 
         query = db.ttable.query()
-        query.where(condition="salary < 10")
-        query.where(name=None, salary=10, filter_operator="OR")
-        query.where(salary=100)
+        query = query.where(condition="salary < 10")
+        query = query.where(name=None, salary=10, filter_operator="OR")
+        query = query.where(salary=100)
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable WHERE salary < 10 OR "
+            "`ttable`.salary FROM `ttable` WHERE salary < 10 OR "
             "name is NULL AND salary = 10 AND salary = 100"
         )
 
         query = db.ttable.query()
-        query.where(condition="salary < 10")
-        query.where(name=None, salary=10, filter_operator="OR")
-        query.where(condition="name is not NULL")
-        query.where(salary=100, operator="OR")
+        query = query.where(condition="salary < 10")
+        query = query.where(name=None, salary=10, filter_operator="OR")
+        query = query.where(condition="name is not NULL")
+        query = query.where(salary=100, operator="OR")
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable WHERE salary < 10 OR "
+            "`ttable`.salary FROM `ttable` WHERE salary < 10 OR "
             "name is NULL AND salary = 10 AND name is not NULL "
             "AND salary = 100"
         )
 
         query = db.ttable.query()
-        query.where(condition="     AND salary < 10")
-        query.where(name=None, salary=10, filter_operator="OR")
-        query.where(condition="or name is not NULL")
-        query.where(salary=100, operator="OR")
+        query = query.where(condition="     AND salary < 10")
+        query = query.where(name=None, salary=10, filter_operator="OR")
+        query = query.where(condition="or name is not NULL")
+        query = query.where(salary=100, operator="OR")
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable WHERE salary < 10 OR "
+            "`ttable`.salary FROM `ttable` WHERE salary < 10 OR "
             "name is NULL AND salary = 10 or name is not NULL "
             "AND salary = 100"
         )
@@ -942,27 +950,27 @@ class TestQuery:
         db, _ = dbs
 
         query = db.ttable.query()
-        query.limit(10)
+        query = query.limit(10)
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable LIMIT 10"
+            "`ttable`.salary FROM `ttable` LIMIT 10"
         )
 
         query = db.ttable.query()
-        query.limit(10).offset(10)
+        query = query.limit(10).offset(10)
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable LIMIT 10 OFFSET 10"
+            "`ttable`.salary FROM `ttable` LIMIT 10 OFFSET 10"
         )
 
         query = db.ttable.query()
-        query.offset(10).limit(10)
+        query = query.offset(10).limit(10)
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable LIMIT 10 OFFSET 10"
+            "`ttable`.salary FROM `ttable` LIMIT 10 OFFSET 10"
         )
 
     def test_order(self, dbs: tuple[DB, ...]) -> None:
@@ -970,36 +978,36 @@ class TestQuery:
         db, _ = dbs
 
         query = db.ttable.query()
-        query.order_by("name")
+        query = query.order_by("name")
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable ORDER BY name"
+            "`ttable`.salary FROM `ttable` ORDER BY name"
         )
 
         query = db.ttable.query()
-        query.order_by("name", "post", "salary")
+        query = query.order_by("name", "post", "salary")
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable ORDER BY name, post, salary"
+            "`ttable`.salary FROM `ttable` ORDER BY name, post, salary"
         )
 
         query = db.ttable.query()
-        query.order_by(name="desc", post="asc", salary="desc")
+        query = query.order_by(name="desc", post="asc", salary="desc")
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable ORDER BY name desc, "
+            "`ttable`.salary FROM `ttable` ORDER BY name desc, "
             "post asc, salary desc"
         )
 
         query = db.ttable.query()
-        query.order_by("name", post="asc", salary="desc")
+        query = query.order_by("name", post="asc", salary="desc")
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable ORDER BY name"
+            "`ttable`.salary FROM `ttable` ORDER BY name"
         )
 
     def test_group(self, dbs: tuple[DB, ...]) -> None:
@@ -1007,11 +1015,11 @@ class TestQuery:
         db, _ = dbs
 
         query = db.ttable.query()
-        query.group_by("name")
+        query = query.group_by("name")
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable GROUP BY name"
+            "`ttable`.salary FROM `ttable` GROUP BY name"
         )
 
         # query = db.ttable.query(func.avg("id * 10"), "name")
@@ -1019,7 +1027,7 @@ class TestQuery:
 
         # assert str(query) == (
         #     "SELECT AVG(id * 10) AS avg, `ttable`.name "
-        #     "FROM ttable GROUP BY name"
+        #     "FROM `ttable` GROUP BY name"
         # )
 
         # query = db.ttable.query(func.avg("id * 10"), "name")
@@ -1027,7 +1035,7 @@ class TestQuery:
 
         # assert str(query) == (
         #     "SELECT AVG(id * 10) AS avg, `ttable`.name "
-        #     "FROM ttable GROUP BY name HAVING avg > 60"
+        #     "FROM `ttable` GROUP BY name HAVING avg > 60"
         # )
 
         # query = db.ttable.query(func.avg("id * 10"), "name")
@@ -1042,7 +1050,7 @@ class TestQuery:
 
         # assert str(query) == (
             # "SELECT AVG(id * 10) AS avg, `ttable`.name "
-            # "FROM ttable GROUP BY name HAVING avg > 60 OR avg = 60"
+            # "FROM `ttable` GROUP BY name HAVING avg > 60 OR avg = 60"
         # )
 
     def test_hard(self, dbs: tuple[DB, ...]) -> None:
@@ -1050,15 +1058,17 @@ class TestQuery:
         db, _ = dbs
 
         query: Query = db.ttable.query()
-        query.where(condition="     AND salary < 10").order_by("name")
-        query.where(name=None, salary=10, filter_operator="OR").offset(10)
-        query.where(condition="or name is not NULL").order_by("salary")
-        query.where(salary=100, operator="OR").limit(20)
-        query.group_by("name").having(condition="name = 'TEST'")
+        query = query.where(condition="     AND salary < 10").order_by("name")
+        query = query.where(name=None, salary=10, filter_operator="OR").offset(
+            10,
+        )
+        query = query.where(condition="or name is not NULL").order_by("salary")
+        query = query.where(salary=100, operator="OR").limit(20)
+        query = query.group_by("name").having(condition="name = 'TEST'")
 
         assert str(query) == (
             "SELECT `ttable`.id, `ttable`.name, `ttable`.post, "
-            "`ttable`.salary FROM ttable WHERE salary < 10 OR "
+            "`ttable`.salary FROM `ttable` WHERE salary < 10 OR "
             "name is NULL AND salary = 10 or name is not NULL "
             "AND salary = 100 GROUP BY name HAVING name = 'TEST' "
             "ORDER BY name, salary LIMIT 20 OFFSET 10"
@@ -1072,7 +1082,7 @@ class TestQuery:
         query = db_cls.ttable.query()
         assert query.first() is not None
 
-        query = db_dict.ttable.query().offset(10000)
+        query = db_dict.ttable.query().limit(1).offset(10000)
         assert query.first() is None
 
         query = db_cls.ttable.query(tb.c.id, tb.c.salary)

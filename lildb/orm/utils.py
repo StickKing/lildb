@@ -1,0 +1,52 @@
+"""Module contains any funcs."""
+from __future__ import annotations
+
+from collections import defaultdict
+from typing import TYPE_CHECKING
+from typing import Any
+from typing import Literal
+from typing import TypeVar
+
+
+if TYPE_CHECKING:
+    from ..table import Table
+    from .typings import TModel
+    TModelClass = TypeVar("TModelClass", bound=type[Any])
+
+
+def contain_relation_objects(orm_object: TModel) -> bool:
+    """Check object contain new relation objects."""
+    return len(orm_object._relation_events) > 0
+
+
+def refresh_old_obj_by_new(
+    table: Table,
+    old_orm_object: Any,
+    new_orm_object: Any,
+) -> None:
+    """Move relation funcs to other object."""
+    for name in table.column_names:
+        col_name = f"_column_data_{name}_"
+        setattr(
+            old_orm_object,
+            col_name,
+            getattr(new_orm_object, col_name)
+        )
+
+
+def process_add_relation_objects(
+    orm_object: Any,
+    ref_type: Literal["Relation", "RelationForeignKey"] | None = None,
+) -> None:
+    """Add relation object."""
+    if ref_type is None:
+        for funcs in orm_object._relation_events.values():
+            for func in funcs:
+                func()
+        orm_object._relation_events = defaultdict(list)
+        return
+
+    for func in orm_object._relation_events[ref_type]:
+        func()
+
+    orm_object._relation_events.pop(ref_type)

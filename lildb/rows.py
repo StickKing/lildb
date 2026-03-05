@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from typing import Any
 from typing import Callable
 from typing import Iterable
+from typing import Sequence
 from typing import TypeVar
 
 
@@ -62,8 +63,36 @@ class ABCRow(ABC):
         self.changed_columns = set()
 
 
-class _RowDataClsMixin(ABCRow):
+class _BaseRowDataClsMixin(ABCRow):
     """Mixin for realize change control in row."""
+
+    def __repr__(self: Any) -> str:
+        """View string by obj."""
+        columns = ", ".join(
+            f"{atr_name}={getattr(self, atr_name)}"
+            for atr_name in self.table.column_names
+        )
+        return f"{self.__class__.__name__}({columns})"
+
+
+class _RowDataClsMixin(_BaseRowDataClsMixin):
+    """Row data cls mixin."""
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Check changed attribute for updating and deleting row."""
+        if (
+            hasattr(self, "changed_columns") and
+            self.changed_columns is not None and
+            self.table is not None and
+            name.startswith("_") is False and
+            name in self.table.column_names
+        ):
+            old_value = getattr(self, name)
+            super().__setattr__(name, value)
+            if value != old_value:
+                self.changed_columns.add(name)
+            return
+        super().__setattr__(name, value)
 
     @property
     def not_changed_column_values(self) -> dict[str, Any]:
@@ -83,28 +112,6 @@ class _RowDataClsMixin(ABCRow):
             for name in self.table.column_names
             if name in self.changed_columns
         }
-
-    def __setattr__(self, name: str, value: Any) -> None:
-        """Check changed attribute for updating and deleting row."""
-        if (
-            hasattr(self, "changed_columns") and
-            self.changed_columns is not None and
-            self.table is not None
-        ):
-            old_value = getattr(self, name)
-            super().__setattr__(name, value)
-            if value != old_value:
-                self.changed_columns.add(name)
-            return
-        super().__setattr__(name, value)
-
-    def __repr__(self: Any) -> str:
-        """View string by obj."""
-        columns = ", ".join(
-            f"{atr_name}={getattr(self, atr_name)}"
-            for atr_name in self.table.column_names
-        )
-        return f"{self.__class__.__name__}({columns})"
 
 
 class RowDict(ABCRow, dict):
@@ -145,21 +152,38 @@ class RowDict(ABCRow, dict):
         super().__setitem__(key, value)
 
 
-def make_row_data_cls(table: Table) -> type:
+def make_row_data_cls(
+    table_name: str,
+    column_names: Sequence[str],
+    bases: Sequence[type[Any]] | None = None,
+    *,
+    default_none: bool = True,
+    create_orm_model: bool = False,
+) -> type[Any]:
     """Create data cls row for the transmitted table."""
-    attributes: list[tuple[str, Any, field]] = [
+    attributes: list[tuple[str, Any, Any]] = []
+    init = True
+
+    if bases is None:
+        bases = [_RowDataClsMixin]
+    else:
+        bases = [_RowDataClsMixin, *bases]
+
+    attributes = [
         (atr, Any, field(default=None))
-        for atr in [*table.column_names, "table"]
+        for atr in column_names
     ]
-    attributes.append(
-        ("changed_columns", set, field(default_factory=lambda: set()))
-    )
+    attributes.extend([
+        ("changed_columns", set, field(default_factory=lambda: set())),
+        ("table", Any, field(default=None))
+    ])
 
     return make_dataclass(
-        f"Row{table.name.title()}DataClass",
+        f"Row{table_name}DataClass",
         attributes,
         repr=False,
-        bases=(_RowDataClsMixin,),
+        bases=(*bases,),
+        init=init,
     )
 
     # data_cls.__repr__ = repr
@@ -212,7 +236,9 @@ def dataclass_row(  # noqa: PLR0913
         cls.__annotations__["table"] = Any
         cls.__annotations__["changed_columns"] = set
         cls.table = field(default=None)  # type: ignore
-        cls.changed_columns = field(default_factory=lambda: set())
+        cls.changed_columns = field(  # type: ignore
+            default_factory=lambda: set(),
+        )
 
         # TODO (stickking): Remove _process_class and take wrap
         # 0000
@@ -244,6 +270,6 @@ def dataclass_row(  # noqa: PLR0913
     cls = wrap(cls)
 
     if repr is False:
-        cls.__repr__ = cls.__str__
+        cls.__repr__ = cls.__str__  # type: ignore
 
     return cls

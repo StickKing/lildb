@@ -1,6 +1,8 @@
 """Module contain test for select query."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from lildb import DB
@@ -9,7 +11,8 @@ from lildb import DB
 @pytest.fixture(scope="package")
 def db() -> DB:
     """Create db objects."""
-    return DB._instances["test.db"]
+    test_db_path = DB.normalize_path(Path("test.db"))
+    return DB._instances[test_db_path]
 
 
 class TestTable:

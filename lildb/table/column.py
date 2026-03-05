@@ -5,7 +5,7 @@ from numbers import Number
 from typing import TYPE_CHECKING
 from typing import Any
 from typing import Callable
-from typing import Iterable
+from typing import Sequence
 
 from ..sql import func
 
@@ -13,8 +13,8 @@ from ..sql import func
 if TYPE_CHECKING:
     from lildb.operations import Query
 
+    from ..sql import SQLBase
     from ..sql import TFunc
-    from ..sql import TFuncCLS
     from .table import Table
 
 
@@ -31,23 +31,35 @@ class ResultComparison(str):
     def _create_operation(
         self,
         operation: str,
-        value: ResultComparison,
+        value: ResultComparison | str | SQLBase,
     ) -> ResultComparison:
         return ResultComparison(f"{value} {operation} {self}")
 
-    def __and__(self, value: ResultComparison) -> ResultComparison:
+    def __and__(
+        self,
+        value: ResultComparison | str | SQLBase,
+    ) -> ResultComparison:
         """."""
         return self._create_operation("AND", value)
 
-    def __or__(self, value: ResultComparison) -> ResultComparison:
+    def __or__(
+        self,
+        value: ResultComparison | str | SQLBase,
+    ) -> ResultComparison:
         """."""
         return self._create_operation("OR", value)
 
-    def __rand__(self, value: ResultComparison) -> ResultComparison:
+    def __rand__(
+        self,
+        value: ResultComparison | str | SQLBase,
+    ) -> ResultComparison:
         """."""
         return self._create_operation("AND", value)
 
-    def __ror__(self, value: ResultComparison) -> ResultComparison:
+    def __ror__(
+        self,
+        value: ResultComparison | str | SQLBase,
+    ) -> ResultComparison:
         """."""
         return self._create_operation("OR", value)
 
@@ -56,19 +68,19 @@ class Column:
     """Column."""
 
     __slots__ = (
-        "_table",
+        "table_name",
         "_column_name",
         "_full_column_name",
         "complete_label",
     )
 
-    def __init__(self, table: Table, column_name: str) -> None:
+    def __init__(self, table_name: str, column_name: str) -> None:
         """Initialize."""
-        self._table = table
+        self.table_name = table_name
         self._column_name = column_name
         self.complete_label = column_name
         self._full_column_name = "`{}`.{}".format(
-            self._table.name,
+            self.table_name,
             self._column_name,
         )
 
@@ -109,11 +121,11 @@ class Column:
         )
         return ResultComparison(result)
 
-    def __eq__(self, value: object) -> ResultComparison:
+    def __eq__(self, value: object) -> ResultComparison:  # type: ignore
         """."""
         return self._create_operation("=", value)
 
-    def __ne__(self, value: object) -> ResultComparison:
+    def __ne__(self, value: object) -> ResultComparison:  # type: ignore
         """."""
         return self._create_operation("!=", value)
 
@@ -141,12 +153,12 @@ class Column:
         """."""
         return self._create_operation("IS NOT", value)
 
-    def in_(self, value: Iterable | Query) -> ResultComparison:
+    def in_(self, value: Sequence | Query) -> ResultComparison:
         """Realization in operation."""
         if not value:
             msg = "Value could not be empty"
             raise ValueError(msg)
-        if isinstance(value, Iterable):
+        if isinstance(value, Sequence):
             if isinstance(value[0], Number):
                 value = "(" + ", ".join(str(i) for i in value) + ")"
             elif isinstance(value[0], str):
@@ -156,12 +168,12 @@ class Column:
             value = "({})".format(str(value))
         return self._create_operation("IN", value, in_operation=True)
 
-    def not_in(self, value: Iterable | Query) -> str:
+    def not_in(self, value: Sequence | Query) -> str:
         """Realization in operation."""
         query = self.in_(value)
         return query.replace("IN", "NOT IN")
 
-    def __getattr__(self, name: TFunc) -> Callable[[], TFuncCLS]:
+    def __getattr__(self, name: TFunc | str) -> Callable[[], SQLBase]:
         """Realize sql funcs."""
         FUNC_NAMES = {
             "avg",
@@ -224,4 +236,4 @@ class Columns:
                 name,
             )
             raise AttributeError(msg)
-        return Column(self._table, name)
+        return Column(self._table.name, name)

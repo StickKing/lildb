@@ -1,26 +1,32 @@
 repos:
 
-  -   repo: https://github.com/compilerla/conventional-pre-commit
-      rev: v3.4.0
-      hooks:
-      -   id: conventional-pre-commit
-          name: Conventional commit check
-          stages: [commit-msg]
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v3.4.0
+    hooks:
+    -   id: conventional-pre-commit
+        name: Conventional commit check
+        stages: [commit-msg]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.3
+    rev: v0.14.7
     hooks:
       - id: ruff
         entry: ruff check -n --config ./pyproject.toml
 
   - repo: https://github.com/pycqa/isort
-    rev: 5.11.5
+    rev: 5.13.2
     hooks:
       - id: isort
         name: isort (python)
-        args: [
-          "--lai",
-          "2",
-          "--sl",
-        ]
+        args: ["--settings-path=./pyproject.toml"]
     types: [python]
+
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: mypy
+        args: [--config-file=./pyproject.toml]
+        language: system
+        require_serial: true
+        types: [python]

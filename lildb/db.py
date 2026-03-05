@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from collections import defaultdict
 from functools import cached_property
 from functools import singledispatchmethod
 from pathlib import Path
@@ -13,14 +14,33 @@ from typing import TYPE_CHECKING
 from typing import Any
 from typing import Callable
 from typing import ClassVar
-from typing import Final
 from typing import Iterator
 from typing import MutableMapping
 from typing import Sequence
+from typing import Type
+from typing import TypeVar
+from typing import cast
+from typing import overload
+
+from typing_extensions import TypeAlias
+from typing_extensions import dataclass_transform
 
 from .enumcls import ResultFetch
 from .operations import CreateTable
+from .operations import Query
+from .orm.model import create_table_and_data_cls_row
+from .table.column import Column
 from .table.table import Table
+
+
+T = TypeVar("T")
+
+if TYPE_CHECKING:
+    from .orm.model import TableData
+    TRegistredTables: TypeAlias = defaultdict[
+        Any,
+        list[tuple[TableData, type[Any]]]
+    ]
 
 
 __all__ = (
@@ -32,9 +52,11 @@ __all__ = (
 class DB:
     """DB component."""
 
-    custom_tables: ClassVar[list[Table]]
-
-    _instances: Final[dict[str, DB]] = {}
+    _instances: ClassVar[dict[Path, DB]] = {}
+    _registered_tables_data: ClassVar[TRegistredTables] = defaultdict(
+        list,
+    )
+    orm_classes: ClassVar[dict[str, type[Any]]] = {}
 
     def __new__(cls: type[DB], *args: Any, **kwargs: Any) -> DB:
         """Use singleton template. Check path and match paths."""
@@ -45,13 +67,15 @@ class DB:
         path = kwargs["path"] if kwargs.get("path") else args[0]
         normalized_path = cls.normalize_path(Path(path))
 
-        for inst_path, instance in cls._instances.items():
-            if cls.normalize_path(Path(inst_path)) == normalized_path:
-                return instance
+        # for inst_path, instance in cls._instances.items():
+        #     if inst_path == normalized_path:
+        #         return instance
+        if normalized_path in cls._instances:
+            return cls._instances[normalized_path]
 
         new_instance = super().__new__(cls)
-        cls._instances[path] = new_instance
-        return cls._instances[path]
+        cls._instances[normalized_path] = new_instance
+        return cls._instances[normalized_path]
 
     @classmethod
     def normalize_path(cls: type[DB], path: Path) -> Path:
@@ -64,21 +88,27 @@ class DB:
         *,
         use_datacls: bool = False,
         debug: bool = False,
+        auto_create_registred_tables: bool = True,
+        custom_tables: list[Table] | None = None,
         **connect_params: Any,
     ) -> None:
         """Initialize DB create connection and cursor."""
         if debug:
             logging.basicConfig(level=logging.DEBUG)
-        self.path = path
+        self.path = self.normalize_path(Path(path))
         self.connect: sqlite3.Connection = sqlite3.connect(
-            path,
+            self.path,
             **connect_params,
         )
         self.use_datacls = use_datacls
         self.table_names: set = set()
-        self.initialize_tables()
-
         self.create_table = getattr(self, "create_table", CreateTable)(self)
+        self._custom_tables = custom_tables or []
+
+        if auto_create_registred_tables:
+            self.create_registred_table()
+
+        self.initialize_tables()
 
     def initialize_tables(self) -> None:
         """Initialize all db tables."""
@@ -90,16 +120,27 @@ class DB:
 
         custom_table_names = set()
 
-        for attr in filter(
-            lambda i: not i.startswith("_"),
-            dir(self.__class__),
-        ):
-            custom_table = getattr(self, attr)
-            if not isinstance(custom_table, Table):
-                continue
-            custom_table_names.add(custom_table.name.lower())
-            custom_table(self)
+        for table in self._custom_tables:
+            custom_table_names.add(table.name.lower())
+            setattr(
+                self,
+                table.name.lower(),
+                table,
+            )
+            table(self)
 
+        # table like class attributes
+        # for attr in filter(
+        #     lambda i: not i.startswith("_"),
+        #     dir(self.__class__),
+        # ):
+        #     custom_table = getattr(self, attr)
+        #     if not isinstance(custom_table, Table):
+        #         continue
+        #     custom_table_names.add(custom_table.name.lower())
+        #     custom_table(self)
+
+        # auto create exists table
         for name in result:
             table_name = name[0].lower()
             self.table_names.add(table_name)
@@ -107,7 +148,7 @@ class DB:
             if table_name in custom_table_names:
                 continue
 
-            new_table = Table(name[0], use_datacls=self.use_datacls)
+            new_table: Table = Table(name[0], use_datacls=self.use_datacls)
             new_table(self)
             setattr(
                 self,
@@ -115,6 +156,7 @@ class DB:
                 new_table,
             )
             self.table_names.add(table_name)
+
         if hasattr(self, "tables"):
             del self.tables
 
@@ -135,6 +177,28 @@ class DB:
         for table in self.tables:
             table.drop(init_tables=False)
         self.initialize_tables()
+
+    @overload
+    def execute(
+        self,
+        query: str,
+        parameters: MutableMapping | Sequence = (),
+        *,
+        many: bool = False,
+        size: int | None = None,
+        result: ResultFetch | None = ResultFetch,
+    ) -> list[Any]: ...
+
+    @overload
+    def execute(
+        self,
+        query: str,
+        parameters: MutableMapping | Sequence = (),
+        *,
+        many: bool = False,
+        size: int | None = None,
+        result: ResultFetch | None = None,
+    ) -> None: ...
 
     def execute(
         self,
@@ -161,13 +225,17 @@ class DB:
         """
         command = query.partition(" ")[0].lower()
         cursor = self.connect.cursor()
-        logging.info(query)
+        logging.info("Query: %s", query)
+        logging.info("Parameters: %s", parameters)
         if many:
             cursor.executemany(query, parameters)
         else:
             cursor.execute(query, parameters)
 
-        if command in {"insert", "delete", "update", "create", "drop"}:
+        if (
+            command in {"delete", "update", "create", "drop", "insert"} and
+            result is None
+        ):
             self.connect.commit()
 
         if command in {"drop", "create"}:
@@ -175,6 +243,7 @@ class DB:
 
         # Check result
         if result is None:
+            cursor.close()
             return None
 
         ResultFetch(result)
@@ -183,7 +252,14 @@ class DB:
 
         if result.value == "fetchmany":
             return result_func(size=size)
-        return result_func()
+
+        data = result_func()
+
+        cursor.close()
+        if command == "insert":
+            self.connect.commit()
+
+        return data
 
     def close(self) -> None:
         """Close connection."""
@@ -193,7 +269,7 @@ class DB:
         """Create context manager."""
         return self
 
-    def __exit__(self, *args, **kwargs: Any) -> None:
+    def __exit__(self, *args: Any, **kwargs: Any) -> None:
         """Close connection."""
         self.close()
 
@@ -201,6 +277,153 @@ class DB:
         def __getattr__(self, name: str) -> Table:
             """Typing for runtime created table."""
             ...
+
+    def create_registred_table(self) -> None:
+        """Create registred table."""
+        # cls = self.__class__
+        cursor = self.connect.cursor()
+
+        for path, tables in self._registered_tables_data.items():
+            for table_info in tables:
+                if path is None or path == self.path:
+
+                    table_data, row_cls = table_info
+                    table_name: str = table_data["table_name"]
+
+                    create_table_query = self.create_table.query(**table_data)
+                    logging.info("Query: %s", create_table_query)
+                    cursor.execute(create_table_query)
+
+                    table_obj = Table(
+                        table_name,
+                        use_datacls=True,
+                        row_cls=row_cls,
+                    )
+                    # setattr(cls, table_name.lower(), table_obj)
+                    self._custom_tables.append(table_obj)
+
+        self.connect.commit()
+
+    @dataclass_transform(kw_only_default=True)
+    @overload
+    def register_table(cls: Type[T]) -> Type[T]: ...
+
+    @dataclass_transform(kw_only_default=True)
+    @overload
+    def register_table(
+        *,
+        path: str | None = None,
+    ) -> Callable[[Type[T]], Type[T]]: ...
+
+    @classmethod
+    @dataclass_transform(kw_only_default=True)
+    def register_table(
+        cls,
+        model_cls: Type[T] = None,
+        /,
+        *,
+        path: str | Path | None = None,
+    ) -> Type[T] | Callable[[Type[T]], Type[T]]:
+        """Registrate table.
+
+        Args:
+            path (str | Path | None): path to datebase file
+        """
+        def wrap(model_cls: T) -> T:
+            """Wrap func."""
+            table_data_row_cls = create_table_and_data_cls_row(model_cls)
+            correct_path = cls.normalize_path(Path(cast(str, path)))
+            cls._registered_tables_data[correct_path].append(
+                table_data_row_cls,
+            )
+            cls.orm_classes[table_data_row_cls[0]["table_name"]] = model_cls
+            return cast(T, table_data_row_cls[1])
+
+        if model_cls is None and path is not None:
+            return wrap
+
+        table_data_row_cls = create_table_and_data_cls_row(model_cls)
+        cls._registered_tables_data[path].append(table_data_row_cls)
+        cls.orm_classes[table_data_row_cls[0]["table_name"]] = model_cls
+        return table_data_row_cls[1]
+
+    def add(self, *orm_objs: Any) -> list[int | None]:
+        """Add new ORM object in db."""
+        if hasattr(orm_objs[0], "orm_obj") is False:
+            msg = "Unknown object type"
+            raise TypeError(msg)
+
+        items_by_table: defaultdict[Table, list] = defaultdict(list)
+
+        for obj in orm_objs:
+            table_name: str = obj.__table_name__
+            table_obj: Table = getattr(self, table_name)
+
+            items_by_table[table_obj].append(obj)
+
+        object_ids = []
+        for table, objects in items_by_table.items():
+            object_ids.append(table.add(*objects))
+
+        return object_ids
+
+    def query(self, *columns_or_orm: Column | Type[T]) -> Query[T]:
+        """Create query."""
+        query = None
+        models = []
+        columns = []
+
+        if not columns_or_orm:
+            msg = "Set columns or orm model"
+            raise ValueError(msg)
+
+        for col_orm in columns_or_orm:
+            if isinstance(col_orm, Column):
+                if query is None:
+                    table: Table = getattr(
+                        self,
+                        col_orm.table_name.lower(),
+                    )
+                    query = Query(table)
+                columns.append(col_orm)
+                continue
+
+            if query is None:
+                table = getattr(
+                    self,
+                    col_orm.__table_name__,  # type: ignore
+                )
+                query = Query(table)
+            models.append(col_orm)
+
+        if not columns and not models:
+            msg = "Incorrect type"
+            raise TypeError(msg)
+
+        if columns and models:
+            columns.extend(
+                getattr(model, column)
+                for model in models
+                for column in model.__column_fields__  # type: ignore
+            )
+            return query(*columns)
+
+        if columns:
+            return query(*columns)
+
+        if len(models) > 1:
+            columns.extend(
+                getattr(model, column)
+                for model in models
+                for column in model.__column_fields__  # type: ignore
+            )
+            return query(*columns)
+
+        if query is None:
+            msg = "Not found data for query"
+            raise ValueError(msg)
+
+        return query()
 
 
 class Future:
@@ -247,7 +470,7 @@ class ThreadDB(DB):
         """Initialize DB create connection, cursor and worker thread."""
         connect_params["check_same_thread"] = False
         self.worker_event = Event()
-        self.worker_queue = Queue()
+        self.worker_queue: Queue = Queue()
         self.worker = Thread(
             target=self.execute_worker,
             daemon=True,
@@ -285,7 +508,11 @@ class ThreadDB(DB):
                 future.event.set()
                 self.worker_queue.task_done()
 
-    def execute(self, *args: Any, **kwargs: Any) -> list[Any] | None:
+    def execute(  # type: ignore[override]
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> list[Any] | None:
         """Create future obj and sending args in worker."""
         future = Future()
         self.worker_queue.put((future, args, kwargs))
@@ -301,7 +528,5 @@ class ThreadDB(DB):
         super().close()
 
 
-
 if __name__ == "__main__":
     db = DB("local")
-

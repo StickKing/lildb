@@ -1,19 +1,62 @@
-[tool.poetry]
+[project]
 name = "LilDB"
-version = "0.5.5"
+version = "0.6.0"
 description = "LilDB provides a simplified wrapper for SQLite3."
-authors = ["Anton Panteleev <mainsample@yandex.ru>"]
+authors = [
+    { name = "Anton Panteleev", email = "mainsample@ya.ru" }
+]
+requires-python = ">=3.8,<4"
 readme = "README.md"
 license = "MIT"
-packages = [{include = "lildb"}]
-repository = "https://github.com/StickKing/lildb"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Topic :: Database",
+    "Topic :: Database :: Database Engines/Servers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Intended Audience :: Developers", 
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+dependencies = ["typing_extensions==4.13.2"]
+keywords = [
+    "sqlite", "database", "sql", "orm", "lightweight", 
+    "embedded", "python-db", "sqlite3"
+]
 
-[tool.poetry.dependencies]
-python = "^3.8"
+[project.urls]
+Repository = "https://github.com/StickKing/lildb"
+
+[dependency-groups]
+dev = [
+    "pytest==8.0.0",
+    "tox==4.25.0",
+]
+linting = [
+  "ruff==0.14.7",
+  "mypy",
+  "pre-commit",
+]
+
+[tool.uv]
+default-groups = "all"
+
+[tool.uv.build-backend]
+module-name = ["lildb"]
+module-root = ""
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["uv_build>=0.10.8,<0.11.0"]
+build-backend = "uv_build"
+
 
 [tool.ruff]
 target-version = "py38"
@@ -25,3 +68,12 @@ unfixable = [
     "F401",
     "PLR5501",
 ]
+
+
+[tool.mypy]
+python_version = "3.8"
+
+
+[tool.isort]
+lines_after_imports = 2
+force_single_line = true
