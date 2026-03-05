@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 def contain_relation_objects(orm_object: TModel) -> bool:
     """Check object contain new relation objects."""
-    return len(orm_object._relation_object_add_funcs) > 0
+    return len(orm_object._relation_events) > 0
 
 
 def refresh_old_obj_by_new(
@@ -40,13 +40,13 @@ def process_add_relation_objects(
 ) -> None:
     """Add relation object."""
     if ref_type is None:
-        for funcs in orm_object._relation_object_add_funcs.values():
+        for funcs in orm_object._relation_events.values():
             for func in funcs:
                 func()
-        orm_object._relation_object_add_funcs = defaultdict(list)
+        orm_object._relation_events = defaultdict(list)
         return
 
-    for func in orm_object._relation_object_add_funcs[ref_type]:
+    for func in orm_object._relation_events[ref_type]:
         func()
 
-    orm_object._relation_object_add_funcs.pop(ref_type)
+    orm_object._relation_events.pop(ref_type)

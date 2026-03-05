@@ -8,7 +8,7 @@ repos:
         stages: [commit-msg]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.14.6
+    rev: v0.14.7
     hooks:
       - id: ruff
         entry: ruff check -n --config ./pyproject.toml
@@ -18,9 +18,15 @@ repos:
     hooks:
       - id: isort
         name: isort (python)
-        args: [
-          "--lai",
-          "2",
-          "--sl",
-        ]
+        args: ["--settings-path=./pyproject.toml"]
     types: [python]
+
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: mypy
+        args: [--config-file=./pyproject.toml]
+        language: system
+        require_serial: true
+        types: [python]

@@ -209,7 +209,7 @@ class RelationForeignKey(ForeignKey, DBTableGetterMixin, Generic[TAnyType]):
         if value.table is None:
             getattr(
                 instance,
-                "_relation_object_add_funcs",
+                "_relation_events",
             )["RelationForeignKey"].append(
                 lambda: self._add_new_foreign_object(instance, value),
             )
@@ -452,7 +452,7 @@ class Relation(DBTableGetterMixin[T]):
         if self._foreign_key_to_relation_table is not None:
             getattr(
                 instance,
-                "_relation_object_add_funcs",
+                "_relation_events",
             )["Relation"].append(
                 lambda: self._add_new_many_to_many_object(instance, value),
             )
@@ -460,7 +460,7 @@ class Relation(DBTableGetterMixin[T]):
 
         getattr(
             instance,
-            "_relation_object_add_funcs",
+            "_relation_events",
         )["Relation"].append(
             lambda: self._add_new_one_many_object(instance, value),
         )

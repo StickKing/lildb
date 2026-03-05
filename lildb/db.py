@@ -19,6 +19,7 @@ from typing import MutableMapping
 from typing import Sequence
 from typing import Type
 from typing import TypeVar
+from typing import cast
 from typing import overload
 
 from typing_extensions import TypeAlias
@@ -36,7 +37,10 @@ T = TypeVar("T")
 
 if TYPE_CHECKING:
     from .orm.model import TableData
-    TRegistredTables: TypeAlias = defaultdict[Any, list[TableData]]
+    TRegistredTables: TypeAlias = defaultdict[
+        Any,
+        list[tuple[TableData, type[Any]]]
+    ]
 
 
 __all__ = (
@@ -48,7 +52,7 @@ __all__ = (
 class DB:
     """DB component."""
 
-    _instances: ClassVar[dict[str, DB]] = {}
+    _instances: ClassVar[dict[Path, DB]] = {}
     _registered_tables_data: ClassVar[TRegistredTables] = defaultdict(
         list,
     )
@@ -144,7 +148,7 @@ class DB:
             if table_name in custom_table_names:
                 continue
 
-            new_table = Table(name[0], use_datacls=self.use_datacls)
+            new_table: Table = Table(name[0], use_datacls=self.use_datacls)
             new_table(self)
             setattr(
                 self,
@@ -265,7 +269,7 @@ class DB:
         """Create context manager."""
         return self
 
-    def __exit__(self, *args, **kwargs: Any) -> None:
+    def __exit__(self, *args: Any, **kwargs: Any) -> None:
         """Close connection."""
         self.close()
 
@@ -328,12 +332,12 @@ class DB:
         def wrap(model_cls: T) -> T:
             """Wrap func."""
             table_data_row_cls = create_table_and_data_cls_row(model_cls)
-            correct_path = cls.normalize_path(Path(path))
+            correct_path = cls.normalize_path(Path(cast(str, path)))
             cls._registered_tables_data[correct_path].append(
                 table_data_row_cls,
             )
             cls.orm_classes[table_data_row_cls[0]["table_name"]] = model_cls
-            return table_data_row_cls[1]
+            return cast(T, table_data_row_cls[1])
 
         if model_cls is None and path is not None:
             return wrap
@@ -385,9 +389,9 @@ class DB:
                 continue
 
             if query is None:
-                table: Table = getattr(
+                table = getattr(
                     self,
-                    col_orm.__table_name__,
+                    col_orm.__table_name__,  # type: ignore
                 )
                 query = Query(table)
             models.append(col_orm)
@@ -400,7 +404,7 @@ class DB:
             columns.extend(
                 getattr(model, column)
                 for model in models
-                for column in model.__column_fields__
+                for column in model.__column_fields__  # type: ignore
             )
             return query(*columns)
 
@@ -411,9 +415,13 @@ class DB:
             columns.extend(
                 getattr(model, column)
                 for model in models
-                for column in model.__column_fields__
+                for column in model.__column_fields__  # type: ignore
             )
             return query(*columns)
+
+        if query is None:
+            msg = "Not found data for query"
+            raise ValueError(msg)
 
         return query()
 
@@ -462,7 +470,7 @@ class ThreadDB(DB):
         """Initialize DB create connection, cursor and worker thread."""
         connect_params["check_same_thread"] = False
         self.worker_event = Event()
-        self.worker_queue = Queue()
+        self.worker_queue: Queue = Queue()
         self.worker = Thread(
             target=self.execute_worker,
             daemon=True,
@@ -500,7 +508,11 @@ class ThreadDB(DB):
                 future.event.set()
                 self.worker_queue.task_done()
 
-    def execute(self, *args: Any, **kwargs: Any) -> list[Any] | None:
+    def execute(  # type: ignore[override]
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> list[Any] | None:
         """Create future obj and sending args in worker."""
         future = Future()
         self.worker_queue.put((future, args, kwargs))

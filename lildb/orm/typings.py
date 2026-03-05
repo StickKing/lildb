@@ -22,7 +22,7 @@ class TModel(Protocol):
 
     table: Table
     changed_columns: set[str]
-    _relation_object_add_funcs: defaultdict[str, list]
+    _relation_events: defaultdict[str, list]
     not_changed_column_values: dict[str, Any]
     changed_column_values: dict[str, Any]
 

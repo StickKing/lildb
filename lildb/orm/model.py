@@ -79,7 +79,7 @@ class _RowORMModelMixin(_BaseRowDataClsMixin):
 
         self.table = kwargs.pop("table", None)
         self.changed_columns = set()
-        self._relation_object_add_funcs: defaultdict[str, list] = (
+        self._relation_events: defaultdict[str, list] = (
             defaultdict(list)
         )
 
