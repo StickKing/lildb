@@ -1,6 +1,6 @@
 [project]
 name = "LilDB"
-version = "0.6.0"
+version = "0.6.1"
 description = "LilDB provides a simplified wrapper for SQLite3."
 authors = [
     { name = "Anton Panteleev", email = "mainsample@ya.ru" }
