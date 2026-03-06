@@ -16,6 +16,8 @@ from typing_extensions import TypeAlias
 from typing_extensions import get_args
 from typing_extensions import get_origin
 from typing_extensions import get_type_hints
+from typing_extensions import get_annotations
+from typing_extensions import Format
 
 from ..column_types import BaseType
 from ..column_types import Blob
@@ -162,7 +164,18 @@ def _get_table_columns(
     relation_names: list[str],
 ) -> None:
     """Get table columns from cls."""
-    annotations: dict[str, TColumn] = get_type_hints(model_cls)
+    try:
+        annotations: dict[str, TColumn] = get_type_hints(
+            model_cls,
+            format=Format.STRING,
+        )
+    except TypeError:
+        # Python 3.12
+        annotations = get_annotations(model_cls)
+        for type_ in annotations.values():
+            if isinstance(type_, str) and "TColumn" in type_:
+                msg = "Remove 'from __future__ import annotations'"
+                raise ImportError(msg)
 
     parent_cls, *_ = model_cls.__bases__
 

@@ -25,7 +25,7 @@ class Base:
 class Tag(Base):
     """Tag model."""
 
-    title: TColumn[str] = MColumn(Text())
+    title: TColumn[str]
     persons: TColumn[List["Person"]] = Relation("PersonTag", "tag", "person")
 
 
@@ -35,8 +35,8 @@ class PersonTag:
 
     person_id: TColumn[int]
     tag_id: TColumn[int]
-    person = RelationForeignKey("person_id", "Person", "id")
-    tag = RelationForeignKey("tag_id", "Tag", "id")
+    person: TColumn["Person"] = RelationForeignKey("person_id", "Person", "id")
+    tag: TColumn["Tag"] = RelationForeignKey("tag_id", "Tag", "id")
 
 
 @DB.register_table
@@ -54,8 +54,8 @@ class Order(Base):
 
     title: TColumn[Optional[str]]
 
-    person_id: TColumn[int] = MColumn(Integer(nullable=True))
-    person = RelationForeignKey("person_id", "Person", "id")
+    person_id: TColumn[Optional[int]]
+    person: TColumn[Person] = RelationForeignKey("person_id", "Person", "id")
 
 
 db = DB("person.db")  # Tables will be created automatically
