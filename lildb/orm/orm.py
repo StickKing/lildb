@@ -85,6 +85,7 @@ class MColumn(TColumn[TAnyType]):
         "_column",
         "_cache",
         "_is_cached",
+        "_column_name_str",
     )
 
     _cached_types = {
@@ -102,8 +103,13 @@ class MColumn(TColumn[TAnyType]):
 
     def __set_name__(self, owner: type[Any], column_name: str) -> None:
         self._column_name = f"_column_data_{column_name}_"
-        table_name = owner.__name__
-        self._column = Column(table_name, column_name)
+        self._column_name_str = column_name
+        # table_name = owner.__name__
+        # self._column = Column(table_name, column_name)
+
+    def get_column(self, owner_cls: type[Any]) -> Column:
+        """Get column object."""
+        return Column(owner_cls.__table_name__, self._column_name_str)
 
     @overload
     def __get__(
@@ -127,7 +133,8 @@ class MColumn(TColumn[TAnyType]):
         owner: type[Any],
     ) -> TAnyType | Column:
         if instance is None:
-            return self._column
+            # return self._column
+            return self.get_column(owner)
 
         # check cache
         if self._is_cached and self._cache:
@@ -240,7 +247,7 @@ class Relation(DBTableGetterMixin[T]):
         cascade: Literal["delete", "update"] = "delete",
     ) -> None:
         """."""
-        self.second_table = second_table
+        self.second_table = second_table.lower()
         self._foreign_key_to_current_table = foreign_key_to_current_table
         self._foreign_key_to_relation_table = foreign_key_to_relation_table
         self._cascade = cascade

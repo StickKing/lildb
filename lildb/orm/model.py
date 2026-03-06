@@ -150,6 +150,10 @@ class _RowORMModelMixin(_BaseRowDataClsMixin):
         process_add_relation_objects(self)
         super().change()
 
+    def delete(self) -> None:
+        """Delete this row from db."""
+        self.table.delete(**self.not_changed_column_values)
+
 
 def _get_table_columns(
     model_cls: TModelClass,
@@ -159,6 +163,17 @@ def _get_table_columns(
 ) -> None:
     """Get table columns from cls."""
     annotations: dict[str, TColumn] = get_type_hints(model_cls)
+
+    parent_cls, *_ = model_cls.__bases__
+
+    if parent_cls is not object:
+        for parent_cls in model_cls.__bases__:
+            _get_table_columns(
+                parent_cls,
+                table_columns,
+                foreign_keys,
+                relation_names,
+            )
 
     for key, value in model_cls.__dict__.items():
 
@@ -212,19 +227,6 @@ def _get_table_columns(
 
         table_columns[key] = db_type
 
-    parent_cls, *_ = model_cls.__bases__
-
-    if parent_cls is object:
-        return
-
-    for parent_cls in model_cls.__bases__:
-        _get_table_columns(
-            parent_cls,
-            table_columns,
-            foreign_keys,
-            relation_names,
-        )
-
 
 def create_table_and_data_cls_row(
     model_cls: TModelClass,
@@ -236,7 +238,10 @@ def create_table_and_data_cls_row(
     relation_names: list[str] = []
     _get_table_columns(model_cls, table_columns, foreign_keys, relation_names)
 
-    table_name = model_cls.__name__
+    table_name = model_cls.__name__.lower()
+
+    # if hasattr(model_cls, "__table_name__"):
+    #     table_name = model_cls.__table_name__
 
     table_data = TableData(
         table_name=table_name,
@@ -259,7 +264,8 @@ def create_table_and_data_cls_row(
         {},
     )
 
-    ready_model_cls.__table_name__ = table_name.lower()  # type: ignore
+    model_cls.__table_name__ = table_name  # type: ignore
+    ready_model_cls.__table_name__ = table_name  # type: ignore
     ready_model_cls.__relation_fields__ = tuple(relation_names)  # type: ignore
     ready_model_cls.__column_fields__ = tuple(  # type: ignore
         table_columns.keys()

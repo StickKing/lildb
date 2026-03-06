@@ -72,7 +72,14 @@ FUNC_NAMES = {
 class SQLBase:
     """Base sql function or operation."""
 
-    __slots__ = ("_data", "_label", "_template", "_disable_arguments", "_name")
+    __slots__ = (
+        "_data",
+        "_label",
+        "_template",
+        "_disable_arguments",
+        "_name",
+        "__table_name__",
+    )
 
     # template = "{func}({data}) AS {label}"
 
@@ -98,6 +105,9 @@ class SQLBase:
             raise TypeError(msg)
 
         self._data = args
+
+        if self._data:
+            self.__table_name__ = self._data[0].table_name
         return self
 
     def label(self, name: str) -> SQLBase:

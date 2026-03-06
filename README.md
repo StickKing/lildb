@@ -1,133 +1,281 @@
 # LilDB
 LilDB provides a simplified wrapper for SQLite3.
 
-## Connection.
 
-You can connect to the database in two ways: the usual way and using the context manager.
+## Quick start
 
-Usual way:
+### ORM
+
 ```python
-from lildb import DB
+from __future__ import annotations
 
-db = DB("local.db")
-
-# Disconnect
-db.close()
-```
-
-Context manager:
-```python
+from typing import Optional, List
+from lildb.column_types import Integer, Text
+from lildb.orm import MColumn, RelationForeignKey, Relation, TColumn
 from lildb import DB
 
 
-with DB("local.db") as db:
-    # do anything
-    ...
-# Disconnect
+class Base:
+    """Base model columns."""
+
+    id: TColumn[int] = MColumn(Integer(primary_key=True))
+
+
+@DB.register_table
+class Tag(Base):
+    """Tag model."""
+
+    title: TColumn[str] = MColumn(Text())
+    persons: TColumn[List["Person"]] = Relation("PersonTag", "tag", "person")
+
+
+@DB.register_table
+class PersonTag:
+    """M2m table."""
+
+    person_id: TColumn[int]
+    tag_id: TColumn[int]
+    person = RelationForeignKey("person_id", "Person", "id")
+    tag = RelationForeignKey("tag_id", "Tag", "id")
+
+
+@DB.register_table
+class Person(Base):
+    """Person model."""
+
+    name: TColumn[Optional[str]]
+    orders: TColumn[List["Order"]] = Relation("Order", "person")
+    tags: TColumn[List[Tag]] = Relation("PersonTag", "person", "tag")
+
+
+@DB.register_table
+class Order(Base):
+    """Order model."""
+
+    title: TColumn[Optional[str]]
+
+    person_id: TColumn[int] = MColumn(Integer(nullable=True))
+    person = RelationForeignKey("person_id", "Person", "id")
+
+
+db = DB("person.db")  # Tables will be created automatically
+
+new_person = Person(
+    name="David",
+    orders=[Order(title="hello"), Order(title="world")],
+    tags=[Tag(title="best"), Tag(title="good")],
+)
+
+db.add(new_person)  # Add new person
+
+david = db.query(Person).first()  # Get first person
+
+print(david)
+# PersonModel(id=1, name=David)
+
+print(david.orders)
+# [OrderModel(id=1, person_id=1, title=hello), OrderModel(id=2, person_id=1, title=world)]
+
+print(david.tags)
+# [TagModel(id=1, title=best), TagModel(id=2, title=good)]
+
+david.name = "Tom"
+david.tags = [Tag(title="other tag")]
+
+david.change()  # Update model
+
+tom = db.query(Person).where(id=1).first()
+print(tom)
+# PersonModel(id=1, name=Tom)
+
+print(tom.tags)
+# [TagModel(id=3, title=other tag)]
+
+tom.delete()  # Delete person
+
+print(db.query(Person).all())
+# []
+
 ```
 
-DB automatically collects information about existing tables, and allows you to present data in the form of dict or dataclass.
-
-By default db returns data as dict, you can change that with 'use_datacls' flag.
+### Manual
 ```python
 from lildb import DB
-
-# Dict rows
-db = DB("local.db")
-
-# DataClass rows
-db = DB("local.db", use_datacls=True)
-```
-
-## About table
-If you are not using a custom table (more on this below), then DB will collect data about the tables automatically and you can use them using the DB attributes. For example, if there is a 'Person' table in the database, then you can work with it through the 'person' attribute.
-```python
-db = DB("local.db")
-
-db.person
-print(db.person)
-# <Table: Person>
-
-```
+from lildb.column_types import Integer, Text, ForeignKey
 
 
-## Create table
-Simple create table without column types:
-```python
-db.create_table("Person", ("name", "post", "email", "salary", "img"))
+db = DB("person_manual.db")
 
-# Equivalent to 'CREATE TABLE IF NOT EXISTS Person(name, post, email, salary, img)'
-```
+# Create tables
 
+db.create_table(
+    "Tag",
+    {
+        "id": Integer(primary_key=True),
+        "title": Text(),
+    },
+)
 
-#### Advanced create table
-If you want use more features take this:
-```python
-from lildb.column_types import Integer, Real, Text, Blob
+db.create_table(
+    "PersonTag",
+    {
+        "person_id": Integer(),
+        "tag_id": Integer(),
+    },
+    foreign_keys=(
+        ForeignKey("person_id", "Person", "id"),
+        ForeignKey("tag_id", "Tag", "id"),
+    ),
+    table_primary_key=(
+        "person_id",
+        "tag_id",
+    )
+)
 
 db.create_table(
     "Person",
     {
         "id": Integer(primary_key=True),
-        "name": Text(nullable=True),
-        "email": Text(unique=True),
-        "post": Text(default="Admin"),
-        "salary": Real(default=10000),
-        "img": Blob(nullable=True),
-    },
-)
-
-# Equivalent to 'CREATE TABLE IF NOT EXISTS Person (id INTEGER PRIMARY KEY NOT NULL, name TEXT, email TEXT NOT NULL UNIQUE, post TEXT DEFAULT 'Admin' NOT NULL, salary REAL DEFAULT 10000 NOT NULL, img BLOB)'
-
-
-db.create_table(
-    "Post",
-    {
-        "id": Integer(),
         "name": Text(),
     },
-    table_primary_key=("id", "name"),
 )
 
-# Equivalent to 'CREATE TABLE IF NOT EXISTS Post (id INTEGER NOT NULL, name TEXT NOT NULL, PRIMARY KEY(id,name))'
-```
+db.create_table(
+    "Order",
+    {
+        "id": Integer(primary_key=True),
+        "title": Text(),
+        "person_id": Integer(nullable=True),
+    },
+)
 
-## Insert data
 
-Add new row:
-```python
-db.person.insert({
-    "name": "David",
-    "email": "tst@email.com",
-    "salary": 15.5,
-    "post": "Manager",
-})
+db.person.add({"name": "David"})  # Add person
 
-# or
-db.person.add({
-    "name": "David",
-    "email": "tst@email.com",
-    "salary": 15.5,
-})
+db.order.add(  # Add person orders
+    {"title": "hello", "person_id": 1},
+    {"title": "world", "person_id": 1},
+)
 
-# Equivalent to 'INSERT INTO Person (name, email, salary) VALUES(?, ?, ?)'
-```
+db.tag.add(  # Add person tags
+    {"title": "best"},
+    {"title": "good"},
+)
 
-Add many rows:
-```python
-persons = [
-    {"name": "Ann", "email": "a@tst.com", "salary": 15, "post": "Manager"},
-    {"name": "Jim", "email": "b@tst.com", "salary": 10, "post": "Security"},
-    {"name": "Sam", "email": "c@tst.com", "salary": 1.5, "post": "DevOps"},
+db.persontag.add(
+    {"person_id": 1, "tag_id": 1},
+    {"person_id": 1, "tag_id": 2},
+)
+
+david = db.person.query().first()  # Get first person
+
+print(david)
+# RowPersonDataClass(id=1, name=David)
+
+david_orders = db.order.query().where(person_id=david.id).all()
+print(david_orders)
+# [RowOrderDataClass(id=1, title=hello, person_id=1), RowOrderDataClass(id=2, title=world, person_id=1)]
+
+
+# Get tags
+person_tab_tb = db.persontag
+
+david_tag_ids_query = person_tab_tb.query(
+    person_tab_tb.c.tag_id,
+).where(
+    person_id=david.id,
+)
+
+david_tag_ids = [
+    row.tag_id
+    for row in david_tag_ids_query.all()
 ]
 
-db.person.insert(persons)
+david_tags = db.tag.query().where(db.tag.c.id.in_(david_tag_ids)).all()
+print(david_tags)
+# [RowTagDataClass(id=1, title=best), RowTagDataClass(id=2, title=good)]
 
-# or
-db.person.add(persons)
+
+david.name = "Tom"
+david.change()  # Update person
+db.persontag.delete(person_id=david.id)
+new_tag = db.tag.add({"title": "other tag"}, returning=True)
+db.persontag.add({"tag_id": new_tag.id, "person_id": david.id})
+
+david.delete()
+
+print(db.person.query().all())
+# []
 ```
 
-## Query
+
+
+
+## Query for ORM
+You can use 'query' to create a more complex sql-query. But it unstable.
+
+```python
+# Return all data from person table
+db.query(Person).all()
+
+# Return first row from person table
+db.query(Person).first()
+
+
+# Use id and name column
+db.query(Person.id, Person.name)
+
+# Use sql func on column
+db.query(Person.name.length())
+db.query(Person.name.lower())
+db.query(Person.id.max())
+db.query(Person).where(Person.id.is_(None))
+db.query(Person).where(Person.id.in_([1, 2]))
+
+# Use other funcs
+from lildb.sql import func
+
+db.query(func.abs(Person.id))
+db.query(func.distinct(Person.name))
+db.query(func.lower(Person.name))
+db.query(Person).where(
+    func.like(Person.name, "Dav%") | (Person.id == 3)
+)
+
+db.query(Person.name.upper().label("upper_name"))
+# SELECT UPPER(`Person`.name) AS upper_name FROM Person
+
+# Return data with id = 1
+db.query(Person).where(id=1)
+# Alternative
+db.query(Person).where(Person.id == 1)
+db.query(Person).where(condition="id = 1")
+
+db.query(Person).where(id=1, name="David", filter_operator="AND")
+
+# Various conditions
+db.query(Person).where(
+    (Person.name == "David") | (Person.id == 2)
+)
+
+query = db.query(Person)
+# Limit data
+query = query.limit(10).offset(2)
+
+# Group by data
+query = query.group_by(Person.id)
+
+# Order data
+query = query.order_by(Person.id)
+
+# Check exists
+query.exists()
+
+# Check row count
+query.count()
+```
+
+## Query for manual
 You can use 'query' to create a more complex sql-query. But it unstable.
 
 ```python
@@ -196,122 +344,6 @@ query.exists()
 query.count()
 ```
 
-## Select data
-
-Get all data from table:
-```python
-db.person.all()
-
-# Equivalent to 'SELECT * FROM Person'
-
-```
-
-Get first three rows:
-```python
-db.person.select(size=3)
-```
-
-Iterate through the table:
-```python
-for row in db.person:
-    row
-```
-
-Simple filter:
-```python
-db.person.select(salary=10, post="DevOps")
-
-# Equivalent to 'SELECT * FROM Person WHERE salary = 10 AND post = "DevOps"'
-
-db.person.select(id=1, post="DevOps", operator="OR")
-
-# Equivalent to 'SELECT * FROM Person WHERE salary = 10 OR post = "DevOps"'
-```
-
-Get one row by id or position if id does not exist:
-```python
-db.person[1]
-
-# or
-db.person.get(id=1)
-db.person.get(name="Ann")
-```
-
-Select specific columns:
-```python
-db.person.select(columns=["name", "id"])
-
-# Equivalent to 'SELECT name, id FROM Person'
-```
-
-For more complex queries, use:
-```python
-db.person.select(condition="salary < 15")
-# Equivalent to 'SELECT * FROM Person WHERE salary < 15'
-
-
-db.person.select(columns=["name"], condition="salary < 15 or name = 'Ann'")
-# Equivalent to 'SELECT name FROM Person WHERE salary < 15 or name = 'Ann''
-```
-
-## Update data
-
-Change one row"
-```python
-row = db.person[1]
-
-# if use dict row
-row["post"] = "Developer"
-row.change()
-
-# if use data class row
-row.post = "Developer"
-row.change()
-```
-
-Update column value in all rows
-```python
-db.person.update({"salary": 100})
-```
-
-```python
-# Change David post
-db.person.update({"post": "Admin"}, id=1)
-```
-
-Simple filter
-```python
-db.person.update({"post": "Developer", "salary": 1}, id=1, name="David")
-
-db.person.update(
-    {"post": "Admin", "salary": 1},
-    name="Ann",
-    id=1,
-    operator="or",
-)
-# Equivalent to 'UPDATE Person SET post = "Ann", salary = 1 WHERE name = 'Ann' or id = 1'
-```
-
-## Delete data
-
-Delete one row
-```python
-row = db.person[1]
-row.delete()
-```
-
-Simple filter delete
-```python
-db.person.delete(id=1, name="David")
-```
-
-Delete all rows with salary = 1
-```python
-db.person.delete(salary=1)
-
-db.person.delete(salary=10, name="Sam", operator="OR")
-# Equivalent to 'DELETE FROM Person WHERE salary = 10 OR name = "Sam"'
-```
 
 ## Multithreaded
 You can use multithreaded using ThreadDB, example:
@@ -360,155 +392,6 @@ To ensure multi-thread safety and prevent potential deadlocks, lildb utilizes an
 2) In a separate execution thread, the requests are processed one by one from the execution pipe.
 3) The separate thread reads the requests and executes them sequentially on the SQLite database.
 
-## Custom rows, tables, db
-If you want to create a custom class of rows or tables, then you can do it as follows:
-```python
-# We create custom row for table Post
-from lildb.rows import dataclass_row
-from lildb import Table
-from lildb import DB
-from lildb.column_types import Integer
-from lildb.column_types import Text
 
-
-@dataclass_row
-class CustomPostRow:
-    """Any custom data class row."""
-
-    id: int
-    name: str
-
-    def title_post(self) -> str:
-        """Any custom method."""
-        return self.name.title()
-
-
-class CustomPostTable(Table):
-    """Any custom table class."""
-
-    # Table name in DB
-    table_name = "post"
-
-    # Use custom data class row
-    row_cls = CustomPostRow
-
-
-class CustomDB(DB):
-    """Custom DB."""
-
-    post = CustomPostTable()
-
-
-# Work with custom obj
-db = CustomDB("post.db")
-
-# Create table
-db.create_table(
-    "Post",
-    {
-        "id": Integer(),
-        "name": Text(),
-    },
-    table_primary_key=("id", "name"),
-)
-
-
-print(db.post)
-# <CustomPostTable: Post>
-
-db.post.add({"id": 1, "name": "manager"})
-db.post.add({"id": 2, "name": "developer"})
-
-print(db.post.all())
-# [CustomPostRow(id=1, name=manager), CustomPostRow(id=2, name=developer)]
-
-
-row = db.post.get(id=1)
-print(row.title_post())
-# Manager
-
-row.name = "admin"
-row.change()
-
-print(row.title_post())
-# Admin
-
-row.delete()
-
-print(db.post.all())
-# [CustomPostRow(id=2, name=developer)]
-```
-
-### dataclass_row
-dataclass_row (from lildb.rows import dataclass_row) works the same way as 'dataclass' (from dataclasses), the only difference is that 'dataclass_row' adds two arguments and a mixin to work correctly.
-
-If you don't want to use 'dataclass_row' then make your row-class as follows:
-```python
-from dataclasses import dataclass
-from lildb import _RowDataClsMixin
-from lildb import Table
-
-
-@dataclass
-class CustomPostRow(_RowDataClsMixin):
-    """Any custom data class row."""
-
-    id: int
-    name: str
-
-    # Required fields for row-cls
-    table: Table
-    changed_columns: set
-
-    def title_post(self) -> str:
-        """Any custom method."""
-        return self.name.title()
-```
-
-### Custom Dict row
-If you want to use dict instead of dataclass, you can do it like this
-```python
-from lildb import RowDict
-
-
-class CustomPostRow(RowDict):
-    """Any custom data class row."""
-
-    def title_post(self) -> str:
-        """Any custom method."""
-        return self["name"].title()
-```
-
-### Custom select, insert, delete and update
-The corresponding class is responsible for each CRUD operation. You can create your own instances in the following way
-
-```python
-# operation classes
-from lildb import Select, Insert, Update, Delete
-
-class CustomSelect(Select):
-    """Custom select."""
-
-    def get_manager(self) -> list:
-        """Get all managers."""
-        return self(name="manager")
-
-
-class CustomPostTable(Table):
-    """Any custom table class."""
-
-    # Table name in DB
-    name = "post"
-
-    # Use custom data class row
-    row_cls = CustomPostRow
-
-    # Custom select
-    select = CustomSelect
-
-    # Custom other operation
-    # insert = CustomInsert
-    # update = CustomUpdate
-    # delete = CustomDelete
-
-```
+## Other docs
+1. [manual docs](./docs/manual.md)

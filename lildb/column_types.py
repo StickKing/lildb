@@ -147,19 +147,20 @@ class BaseType(ColumnString):
 
     def __str__(self) -> str:
         """Create string column type."""
+        sql_column_type = self.data
         if self.default:
             if isinstance(self.default, str):
-                self.data += f" DEFAULT '{self.default}' "
+                sql_column_type += f" DEFAULT '{self.default}' "
             else:
-                self.data += f" DEFAULT {self.default} "
+                sql_column_type += f" DEFAULT {self.default} "
         if self.primary_key:
-            self.data += " PRIMARY KEY "
+            sql_column_type += " PRIMARY KEY "
             self.nullable = False
         if not self.nullable:
-            self.data += " NOT NULL "
+            sql_column_type += " NOT NULL "
         if self.unique:
-            self.data += " UNIQUE "
-        return str(self.data)
+            sql_column_type += " UNIQUE "
+        return sql_column_type
 
 
 class Integer(BaseType):
@@ -197,13 +198,13 @@ class Integer(BaseType):
 
     def __str__(self) -> str:
         """Create string column type."""
-        self.data = super().__str__()
+        sql_column_type = super().__str__()
         if self.autoincrement:
-            self.data = self.data.replace(
+            sql_column_type = sql_column_type.replace(
                 "PRIMARY KEY",
                 "PRIMARY KEY AUTOINCREMENT",
             )
-        return self.data
+        return sql_column_type
 
     @singledispatchmethod
     def to_db(self, value: Any) -> Any:
@@ -482,7 +483,7 @@ class ForeignKey(BaseType):
     ) -> None:
         """Initialize."""
         self.column = column
-        self.second_table = second_table
+        self.second_table = second_table.lower()
         self.reference_column = reference_column
         self.on_delete = DeleteAction(on_delete) if on_delete else on_delete
         self.on_update = UpdateAction(on_update) if on_update else on_update

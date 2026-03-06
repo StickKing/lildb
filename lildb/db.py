@@ -29,6 +29,7 @@ from .enumcls import ResultFetch
 from .operations import CreateTable
 from .operations import Query
 from .orm.model import create_table_and_data_cls_row
+from .sql import SQLBase
 from .table.column import Column
 from .table.table import Table
 
@@ -86,7 +87,7 @@ class DB:
         self,
         path: str,
         *,
-        use_datacls: bool = False,
+        use_datacls: bool = True,
         debug: bool = False,
         auto_create_registred_tables: bool = True,
         custom_tables: list[Table] | None = None,
@@ -367,7 +368,7 @@ class DB:
 
         return object_ids
 
-    def query(self, *columns_or_orm: Column | Type[T]) -> Query[T]:
+    def query(self, *columns_or_orm: Column | Type[T] | SQLBase) -> Query[T]:
         """Create query."""
         query = None
         models = []
@@ -387,6 +388,16 @@ class DB:
                     query = Query(table)
                 columns.append(col_orm)
                 continue
+
+            if isinstance(col_orm, SQLBase):
+                if query is None:
+                    table = getattr(
+                        self,
+                        col_orm.__table_name__,  # type: ignore
+                    )
+                    columns.append(col_orm)
+                    query = Query(table)
+                    continue
 
             if query is None:
                 table = getattr(
